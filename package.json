@@ -1,0 +1,37 @@
+{
+  "name": "grupo-festa-adm",
+  "version": "1.0.0",
+  "description": "Grupo Festa ADM — painel comercial desktop (Electron + React + TypeScript) integrado à API Google Sheets",
+  "main": "dist-electron/electron/main.js",
+  "author": "Grupo Festa",
+  "license": "UNLICENSED",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build && tsc -p tsconfig.node.json",
+    "preview": "vite preview",
+    "electron:dev": "tsx electron/main.ts",
+    "electron:build": "npm run build && electron ./dist-electron/electron/main.js",
+    "dist": "npm run build && electron-builder --win nsis portable --publish never",
+    "dist:win": "npm run build && electron-builder --win --publish never",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "lucide-react": "^0.469.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "recharts": "^2.15.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3"
+  }
+}
