@@ -1,54 +1,100 @@
 # Grupo Festa ADM
 
-Aplicativo desktop (Electron + React + TypeScript) com dados **exclusivos da API da planilha mestre**
-(Google Apps Script). Nenhum dado fictício: Dashboard, Clientes, Oportunidades, Atividades e Equipe derivam
-das abas mensais (JANEIRO a OUTUBRO).
+Aplicativo **Electron + React + TypeScript** para gestão comercial do Grupo Festa, disponível como
+app desktop (instalador Windows) e como versão web (Netlify). Todos os números vêm **exclusivamente
+da planilha mestre** via Google Apps Script — nenhum dado fictício ou mock.
+
+## Páginas
+
+| Rota | Página | O que mostra |
+|---|---|---|
+| `/` | Dashboard | Receita, pedidos, ticket, série diária, UF, RPI e comparativos do mês |
+| `/dashboard-clientes` | Dashboard Clientes | Base por CNPJ, novos × base, inativos (>90 dias), UF e RPI |
+| `/clientes` | Clientes | Cadastro derivado das vendas, com filtros e recência |
+| `/vendas` | Vendas | Todas as linhas das abas mensais (tabela crua + filtros + total) |
+| `/meta` | Meta | Metas por responsável e realizado na janela 26 → fim do mês |
+| `/oportunidades` | Oportunidades | Kanban de clientes/reativação (grava C/N na planilha) |
+| `/atividades` | Atividades | Um pedido = uma atividade, com filtro por data |
+| `/equipe` | Equipe | RPIs e responsáveis com receita/pedidos |
+| `/config` | Configurações | Token de escrita da API |
 
 ## Fonte de dados
 
-- Base (mestre): `https://script.google.com/macros/s/AKfycbyYOiiySDA56ab3fOlc48wRps9RtPFKAucA6MwjejPp2gSSg4yeknhT-O9eujJdfzCAeA/exec`
-- Leitura: `action=listar&aba=OUTUBRO` (e demais meses). Colunas: Data Lançamento, Nº Ped.,
-  Valor Líquido, Novos Clientes (C = base, N = novo), Cliente, CNPJ, UF, COD. VENDEDOR, RPI, VELA8, PROMO2, SAZONAL.
-- Escrita: POST JSON `action=cadastrar|atualizar|excluir` na aba do mês corrente (`OUTUBRO`) — exige token.
-- Linhas em branco são ignoradas em todos os cálculos. A mestre não marca
-  cancelados/bonificação/expositores — todos os lançamentos válidos somam na receita.
+- API (Apps Script): `https://script.google.com/macros/s/AKfycbyYOiiySDA56ab3fOlc48wRps9RtPFKAucA6MwjejPp2gSSg4yeknhT-O9eujJdfzCAeA/exec`
+- `action=abas` → lista as abas disponíveis; toda aba com nome de mês (JANEIRO…DEZEMBRO) é carregada
+  automaticamente — não há lista fixa de meses no código.
+- `action=listar&aba=JANEIRO` → linhas da aba.
+- Escrita: POST JSON `action=cadastrar|atualizar|excluir` com `token`. O token é configurado em
+  **Configurações** e fica no `localStorage` (`gfadm.apiToken`); a leitura é aberta.
+- Fonte do Apps Script: `Codigo-API-MESTRE.gs` (após editar: Implantar → Gerenciar implantações →
+  lápis → Nova versão → Implantar — mantém a mesma URL).
 
-### Mapeamento honesto (limitação da planilha atual)
+### Colunas das abas mensais (14)
 
-| Área | Origem real |
-|---|---|
-| Dashboard | Agregações de `Valor Líquido`, `Data Lançamento`, `UF`, `RPI`, `Emp.`, `C/N` |
-| Clientes | Agrupamento por `CNPJ`/`Cliente` de VENDAS |
-| Oportunidades (Kanban) | Uma linha = um card; etapa = `C/N` (vazio=Prospecção, N=Negociação, C=Ganha). Mover grava `C/N` via `atualizar` |
-| Atividades | Um pedido = uma atividade; responsável=`RESP.`/`RPI`, tipo=`Emp.`, status=`C/N`+`Confirmação`, data=`Data Lançamento` |
-| Equipe | Pessoas distintas de `RPI` e `RESP.` com receita/pedidos |
+`Data E-mail` · `VALOR FORMULÁRIO` · `Data Lançamento` · `Nº Ped.` · `Valor Líquido` ·
+`Novos Clientes` · `Cliente` · `CNPJ` · `UF` · `COD. VENDEDOR` · `RPI` · `VELA8` · `PROMO2` · `SAZONAL`
 
-> Para ter Clientes/Oportunidades/Atividades como tabelas independentes, crie abas próprias na planilha e
-> aponte o app para elas — o cliente `src/lib/api.ts` já é genérico (`listar/cadastrar/atualizar/excluir` por aba).
+## Regras de negócio
+
+- **Linhas vazias** (sem cliente/CNPJ/pedido/valores) são ignoradas em todos os cálculos.
+- **Receita contábil**: entra só a linha com `Nº Ped.` preenchido, `Valor Líquido` numérico e
+  **sem marcador**. Marcadores excluídos: `CANCELADO`, `EXPOSITOR`, `BONIFICAÇÃO`, `TROCA`
+  (detectados nas 4 primeiras colunas, no Cliente e no Valor Líquido). Texto não numérico no
+  `Valor Líquido` também exclui.
+- **`VALOR FORMULÁRIO` é bruto (tabela)** — nunca é somado como receita.
+- **Fechamento fiscal: dia 26 → dia 25** (o Dashboard exibe a janela lida do relatório).
+- **Clientes por CNPJ**: reativação a partir de 60 dias sem comprar; inativos contados acima de 90.
+- **Meta** (`/meta`): janela do dia 26 até o último dia do mês corrente, avaliada pela **Data E-mail**.
+  - Josimar e Cristiano: soma das vendas dos RPIs que cada um responde na aba **Equipe**
+    (cruzamento exato `Equipe.CODIGO` = `COD. VENDEDOR`).
+  - Thalles: vendas próprias (RPI `THALLES AFONSO`, `COD. VENDEDOR` 1313).
+  - Valores e responsáveis editáveis em `src/lib/metas.ts`.
 
 ## Rodar
 
 ```bash
 npm install
-npm run dev          # renderer em http://localhost:5173
-npm run electron:dev # abre o Electron apontando para o Vite (dev)
+npm run dev            # renderer em http://localhost:5173
+npm run electron:dev   # Electron apontando para o Vite (dev)
 ```
+
+Pré-requisito: **Node 20+**.
 
 ## Build + instalador Windows
 
 ```bash
-npm run build   # valida TS + gera dist/ + dist-electron/
+npm run build   # tsc -b + vite build + tsc do Electron → dist/ e dist-electron/
 npm run dist    # electron-builder: NSIS + portable em release/
 ```
 
-Pré-requisitos: Node 20+. Ícone opcional em `build/icon.ico`. Para erro de token na escrita,
-configure o token em **Configurações** (salvo em `localStorage`) — ele é enviado como `token` no GET e no POST.
+Ícone opcional em `build/icon.ico`.
+
+## Publicar a versão web (Netlify)
+
+1. `npm run build`;
+2. Arraste **apenas a pasta `dist/`** em https://app.netlify.com/drop
+   (o `_redirects` já está incluído para o HashRouter).
+
+Alternativa: conectar o repositório na Netlify — build `npm run build`, publish `dist`.
+
+## Estrutura
+
+```
+src/
+  pages/         Dashboard, Clientes, Vendas, Meta, Oportunidades, Atividades, Equipe, Config
+  components/    Layout, UI
+  hooks/         useVendas (descoberta dinâmica das abas + carga)
+  state/         VendasContext
+  lib/           api, domain (regras), config, metas, format
+electron/        processo principal + preload
+```
 
 ## Scripts
 
 | Script | O que faz |
 |---|---|
 | `npm run dev` | Vite (renderer) |
-| `npm run electron:dev` | Electron em modo dev (`tsx electron/main.ts`, usa `VITE_DEV_URL`) |
-| `npm run build` | `tsc -b` + `vite build` + `tsc -p tsconfig.node.json` |
-| `npm run dist` | build + instalador Windows (NSIS + portable, sem publish) |
+| `npm run electron:dev` | Electron em modo dev |
+| `npm run build` | TypeScript + Vite + Electron |
+| `npm run dist` | Build + instalador Windows (NSIS + portable) |
+| `npm run typecheck` | Só checagem de tipos |
