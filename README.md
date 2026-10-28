@@ -45,6 +45,9 @@ da planilha mestre** via Google Apps Script — nenhum dado fictício ou mock.
 - **Fechamento fiscal: dia 26 → dia 25** (o Dashboard exibe a janela lida do relatório).
 - **Clientes por CNPJ**: reativação a partir de 60 dias sem comprar; inativos contados acima de 90.
 - **Meta** (`/meta`): janela do dia 26 até o último dia do mês corrente, avaliada pela **Data E-mail**.
+  Conta a venda com Data E-mail na janela e Valor Líquido preenchido — inclusive pedidos ainda sem
+  Nº Ped./lançamento; **Previsto** = `VALOR FORMULÁRIO` (tabela), **Realizado** = `Valor Líquido`;
+  cancelado/bonificação/expositor/troca não contam.
   - Josimar e Cristiano: soma das vendas dos RPIs que cada um responde na aba **Equipe**
     (cruzamento exato `Equipe.CODIGO` = `COD. VENDEDOR`).
   - Thalles: vendas próprias (RPI `THALLES AFONSO`, `COD. VENDEDOR` 1313).

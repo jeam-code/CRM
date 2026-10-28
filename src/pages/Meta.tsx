@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listarTudo, type Registro } from '../lib/api';
 import { META_DEFS } from '../lib/metas';
-import { campo, ehContabil, valorFormulario, valorLiquido } from '../lib/domain';
+import { campo, marcador, valorFormulario, valorLiquido, vlNumerico } from '../lib/domain';
 import { dataISO, moeda, normalizarNome, numero } from '../lib/format';
 import { useVendasCtx } from '../state/VendasContext';
 import type { Venda } from '../lib/domain';
@@ -9,10 +9,13 @@ import type { Venda } from '../lib/domain';
 /**
  * Aba META — acompanhamento das metas por responsável.
  * Janela: dia 26 → último dia do mês corrente (calendário), avaliada pela
- * coluna "Data E-mail" das abas mensais. Realizado = soma do Valor Líquido dos
- * lançamentos contábeis (com Nº Ped. e valor) dos RPIs que cada responsável
- * cuida (lista extraída da aba Equipe); Previsto = VALOR FORMULÁRIO (valor de
- * tabela) das mesmas vendas. Nenhum valor é inventado.
+ * coluna "Data E-mail" das abas mensais. Conta a venda com Data E-mail na
+ * janela e Valor Líquido preenchido — inclusive pedidos ainda sem Nº Ped./
+ * lançamento (é o caso das vendas de novembro digitadas em outubro). Realizado
+ * = soma do Valor Líquido dos RPIs que cada responsável cuida (lista extraída
+ * da aba Equipe); Previsto = VALOR FORMULÁRIO (valor de tabela) das mesmas
+ * vendas. Marcadores (cancelado/expositor/bonificação/troca) não contam.
+ * Nenhum valor é inventado.
  */
 interface MetaLinha {
   responsavel: string;
@@ -35,6 +38,10 @@ interface LinhaRpi {
 }
 
 const pctTxt = (pct: number): string => `${pct.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
+
+/** Cancelamento em qualquer célula da linha — na Meta, cancelado não pode constar. */
+const canceladaEmAlgumaCelula = (v: Venda): boolean =>
+  Object.values(v).some((x) => String(x ?? '').toLowerCase().includes('cancel'));
 
 export default function Meta() {
   const { vendas, carregando: vendasCarregando, erro: vendasErro, recarregar } = useVendasCtx();
@@ -87,10 +94,11 @@ export default function Meta() {
     const fim = dataISO(janela.fim);
 
     const noPeriodo = (v: Venda): boolean => {
-      if (!ehContabil(v)) return false;
       const iso = dataISO(campo(v, 'Data E-mail'));
-      if (iso === '') return false;
-      return iso >= ini && iso <= fim;
+      if (iso === '' || iso < ini || iso > fim) return false;
+      if (marcador(v) !== null) return false;
+      if (canceladaEmAlgumaCelula(v)) return false;
+      return vlNumerico(v);
     };
 
     for (const def of META_DEFS) {
@@ -164,8 +172,8 @@ export default function Meta() {
           <h2>Meta</h2>
           <p>
             Janela de {janela.inicio} a {janela.fim} (calendário) • pelo campo Data E-mail • previsto = VALOR FORMULÁRIO
-            (valor de tabela) • realizado = soma do Valor Líquido das vendas contábeis (com Nº Ped. e valor) de cada
-            responsável • equipes conforme aba Equipe • metas definidas pelo gestor
+            (valor de tabela) • realizado = Valor Líquido • inclui pedidos ainda sem Nº Ped./lançamento • cancelado,
+            bonificação, expositor e troca não contam • equipes conforme aba Equipe • metas definidas pelo gestor
           </p>
         </div>
       </div>
