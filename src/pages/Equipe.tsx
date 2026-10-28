@@ -61,7 +61,7 @@ export default function Equipe() {
     void carregarEquipe();
   }, [carregarEquipe]);
 
-  const { membros, fora, resumo, totalPedidos, totalReceita } = useMemo(() => {
+  const { membros, fora, resumo, rosterPedidos, rosterReceita, foraPedidos, foraReceita } = useMemo(() => {
     // vendas contábeis por código de vendedor
     const agg = new Map<string, { pedidos: number; receita: number }>();
     const nomesVenda = new Map<string, string>();
@@ -125,10 +125,12 @@ export default function Equipe() {
       .map(([responsavel, r]) => ({ responsavel, ...r }))
       .sort((a, b) => b.receita - a.receita || b.vendedores - a.vendedores);
 
-    const somaPedidos = lista.reduce((s, m) => s + m.pedidos, 0) + foraLista.reduce((s, f) => s + f.pedidos, 0);
-    const somaReceita = lista.reduce((s, m) => s + m.receita, 0) + foraLista.reduce((s, f) => s + f.receita, 0);
+    const rosterPedidos = lista.reduce((s, m) => s + m.pedidos, 0);
+    const rosterReceita = lista.reduce((s, m) => s + m.receita, 0);
+    const foraPedidos = foraLista.reduce((s, f) => s + f.pedidos, 0);
+    const foraReceita = foraLista.reduce((s, f) => s + f.receita, 0);
 
-    return { membros: lista, fora: foraLista, resumo: resumoLista, totalPedidos: somaPedidos, totalReceita: somaReceita };
+    return { membros: lista, fora: foraLista, resumo: resumoLista, rosterPedidos, rosterReceita, foraPedidos, foraReceita };
   }, [registros, vendas]);
 
   const responsaveis = useMemo(
@@ -211,14 +213,17 @@ export default function Equipe() {
           </tbody>
           <tfoot>
             <tr>
-              <td>Total</td>
+              <td>Total (aba Equipe)</td>
               <td className="direita">{numero(membros.length)}</td>
-              <td className="direita">{numero(totalPedidos)}</td>
-              <td className="direita">{moeda(totalReceita)}</td>
+              <td className="direita">{numero(rosterPedidos)}</td>
+              <td className="direita">{moeda(rosterReceita)}</td>
             </tr>
           </tfoot>
         </table>
-        <p className="sub">Inclui vendedores marcados como “Inativo” na planilha.</p>
+        <p className="sub">
+          Inclui vendedores marcados como “Inativo” na planilha. Fora da aba Equipe: {numero(fora.length)} códigos,{' '}
+          {numero(foraPedidos)} pedidos e {moeda(foraReceita)} — detalhados no painel abaixo.
+        </p>
       </div>
 
       <div className="painel">
@@ -315,6 +320,15 @@ export default function Equipe() {
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={2} className="direita">
+                  Total fora da aba Equipe ({numero(fora.length)} códigos)
+                </td>
+                <td className="direita">{numero(foraPedidos)}</td>
+                <td className="direita">{moeda(foraReceita)}</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       )}

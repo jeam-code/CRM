@@ -39,8 +39,8 @@ export const META_DEFS: MetaDef[] = [
     responsavel: 'Cristiano',
     valor: 165000,
     tipo: 'equipe',
-    // 990 ainda consta sob Jean na aba Equipe, mas pertence ao Cristiano (decisão do gestor).
-    codigosExtra: ['8129', '990'],
+    // 990 já consta sob Cristiano na aba Equipe; resta o 8129, que ainda não está lá.
+    codigosExtra: ['8129'],
     nomesExtra: { '8129': 'THIAGO TROPEIA' },
   },
   { responsavel: 'Thalles', valor: 20000, tipo: 'proprio', rpi: 'THALLES AFONSO', codigo: '1313' },
