@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listarTudo, type Registro } from '../lib/api';
 import { META_DEFS } from '../lib/metas';
-import { campo, ehContabil, valorLiquido } from '../lib/domain';
+import { campo, ehContabil, valorFormulario, valorLiquido } from '../lib/domain';
 import { dataISO, moeda, normalizarNome, numero } from '../lib/format';
 import { useVendasCtx } from '../state/VendasContext';
 import type { Venda } from '../lib/domain';
@@ -9,14 +9,16 @@ import type { Venda } from '../lib/domain';
 /**
  * Aba META — acompanhamento das metas por responsável.
  * Janela: dia 26 → último dia do mês corrente (calendário), avaliada pela
- * coluna "Data E-mail" das abas mensais. Realizado = soma dos lançamentos
- * contábeis (com Nº Ped. e valor) dos RPIs que cada responsável cuida
- * (lista extraída da aba Equipe). Nenhum valor é inventado.
+ * coluna "Data E-mail" das abas mensais. Realizado = soma do Valor Líquido dos
+ * lançamentos contábeis (com Nº Ped. e valor) dos RPIs que cada responsável
+ * cuida (lista extraída da aba Equipe); Previsto = VALOR FORMULÁRIO (valor de
+ * tabela) das mesmas vendas. Nenhum valor é inventado.
  */
 interface MetaLinha {
   responsavel: string;
   meta: number;
   nRpis: number;
+  previsto: number;
   realizado: number;
   pedidos: number;
   falta: number;
@@ -27,6 +29,7 @@ interface LinhaRpi {
   responsavel: string;
   codigo: string;
   nome: string;
+  previsto: number;
   realizado: number;
   pedidos: number;
 }
@@ -93,28 +96,32 @@ export default function Meta() {
     for (const def of META_DEFS) {
       const codigos = def.tipo === 'proprio' ? new Set<string>([String(def.codigo ?? '')]) : (porResp.get(normalizarNome(def.responsavel)) ?? new Set<string>());
 
-      const acumulado = new Map<string, { valor: number; pedidos: number }>();
+      const acumulado = new Map<string, { valor: number; previsto: number; pedidos: number }>();
       let realizado = 0;
+      let previsto = 0;
       let pedidos = 0;
       for (const v of vendas) {
         if (!noPeriodo(v)) continue;
         const cod = campo(v, 'COD. VENDEDOR');
         if (cod === '' || !codigos.has(cod)) continue;
-        const a = acumulado.get(cod) ?? { valor: 0, pedidos: 0 };
+        const a = acumulado.get(cod) ?? { valor: 0, previsto: 0, pedidos: 0 };
         a.valor += valorLiquido(v);
+        a.previsto += valorFormulario(v);
         a.pedidos += 1;
         acumulado.set(cod, a);
         realizado += valorLiquido(v);
+        previsto += valorFormulario(v);
         pedidos += 1;
       }
 
       const listaRpi = [...codigos].filter(Boolean);
       for (const cod of listaRpi) {
-        const a = acumulado.get(cod) ?? { valor: 0, pedidos: 0 };
+        const a = acumulado.get(cod) ?? { valor: 0, previsto: 0, pedidos: 0 };
         linhasRpi.push({
           responsavel: def.responsavel,
           codigo: cod,
           nome: (def.tipo === 'proprio' ? def.rpi : '') || `COD ${cod}`,
+          previsto: a.previsto,
           realizado: a.valor,
           pedidos: a.pedidos,
         });
@@ -124,6 +131,7 @@ export default function Meta() {
         responsavel: def.responsavel,
         meta: def.valor,
         nRpis: listaRpi.length,
+        previsto,
         realizado,
         pedidos,
         falta: Math.max(0, def.valor - realizado),
@@ -155,9 +163,9 @@ export default function Meta() {
         <div>
           <h2>Meta</h2>
           <p>
-            Janela de {janela.inicio} a {janela.fim} (calendário) • pelo campo Data E-mail • realizado = soma das
-            vendas contábeis (com Nº Ped. e valor) de cada responsável • equipes conforme aba Equipe • metas definidas
-            pelo gestor
+            Janela de {janela.inicio} a {janela.fim} (calendário) • pelo campo Data E-mail • previsto = VALOR FORMULÁRIO
+            (valor de tabela) • realizado = soma do Valor Líquido das vendas contábeis (com Nº Ped. e valor) de cada
+            responsável • equipes conforme aba Equipe • metas definidas pelo gestor
           </p>
         </div>
       </div>
@@ -169,6 +177,7 @@ export default function Meta() {
               <th>Responsável</th>
               <th className="direita">RPIs</th>
               <th className="direita">Meta</th>
+              <th className="direita">Previsto</th>
               <th className="direita">Realizado</th>
               <th className="direita">% da meta</th>
               <th className="direita">Falta</th>
@@ -180,6 +189,7 @@ export default function Meta() {
                 <td>{l.responsavel}</td>
                 <td className="direita">{numero(l.nRpis)}</td>
                 <td className="direita">{moeda(l.meta)}</td>
+                <td className="direita">{moeda(l.previsto)}</td>
                 <td className="destaque">{moeda(l.realizado)}</td>
                 <td className="direita">{pctTxt(l.pct)}</td>
                 <td className="direita">{moeda(l.falta)}</td>
@@ -197,6 +207,7 @@ export default function Meta() {
               <th>Responsável</th>
               <th>RPI</th>
               <th className="direita">Pedidos</th>
+              <th className="direita">Previsto</th>
               <th className="direita">Realizado</th>
             </tr>
           </thead>
@@ -206,6 +217,7 @@ export default function Meta() {
                 <td>{d.responsavel}</td>
                 <td>{d.nome}</td>
                 <td className="direita">{numero(d.pedidos)}</td>
+                <td className="direita">{moeda(d.previsto)}</td>
                 <td className="direita">{moeda(d.realizado)}</td>
               </tr>
             ))}

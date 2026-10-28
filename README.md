@@ -12,7 +12,7 @@ da planilha mestre** via Google Apps Script — nenhum dado fictício ou mock.
 | `/dashboard-clientes` | Dashboard Clientes | Base por CNPJ, novos × base, inativos (>90 dias), UF e RPI |
 | `/clientes` | Clientes | Cadastro derivado das vendas, com filtros e recência |
 | `/vendas` | Vendas | Todas as linhas das abas mensais (tabela crua + filtros + total) |
-| `/meta` | Meta | Metas por responsável e realizado na janela 26 → fim do mês |
+| `/meta` | Meta | Metas por responsável: previsto × realizado na janela 26 → fim do mês |
 | `/oportunidades` | Oportunidades | Kanban de clientes/reativação (grava C/N na planilha) |
 | `/atividades` | Atividades | Um pedido = uma atividade, com filtro por data |
 | `/equipe` | Equipe | RPIs e responsáveis com receita/pedidos |

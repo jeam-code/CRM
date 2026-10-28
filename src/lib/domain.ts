@@ -29,6 +29,9 @@ export const campo = (v: Venda, nome: string): string => {
 
 export const valorLiquido = (v: Venda): number => numeroOuZero(v['Valor Líquido']);
 
+/** Valor de tabela (bruto) da linha — usado como previsão, nunca somado como receita. */
+export const valorFormulario = (v: Venda): number => numeroOuZero(v['VALOR FORMULÁRIO']);
+
 /** Texto cru da célula Valor Líquido (pode ser número ou marcador como CANCELADO). */
 function vlTexto(v: Venda): string {
   const raw = v['Valor Líquido'];
