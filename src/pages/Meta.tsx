@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listarTudo, type Registro } from '../lib/api';
 import { META_DEFS } from '../lib/metas';
-import { campo, marcador, valorFormulario, valorLiquido, vlNumerico } from '../lib/domain';
+import { campo, ehContabil, marcador, valorFormulario, valorLiquido } from '../lib/domain';
 import { dataISO, moeda, normalizarNome, numero } from '../lib/format';
 import { useVendasCtx } from '../state/VendasContext';
 import type { Venda } from '../lib/domain';
@@ -9,12 +9,11 @@ import type { Venda } from '../lib/domain';
 /**
  * Aba META — acompanhamento das metas por responsável.
  * Janela: dia 26 → último dia do mês corrente (calendário), avaliada pela
- * coluna "Data E-mail" das abas mensais. Conta a venda com Data E-mail na
- * janela e Valor Líquido preenchido — inclusive pedidos ainda sem Nº Ped./
- * lançamento (é o caso das vendas de novembro digitadas em outubro). Realizado
- * = soma do Valor Líquido dos RPIs que cada responsável cuida (lista extraída
- * da aba Equipe); Previsto = VALOR FORMULÁRIO (valor de tabela) das mesmas
- * vendas. Marcadores (cancelado/expositor/bonificação/troca) não contam.
+ * coluna "Data E-mail" das abas mensais. Previsto = VALOR FORMULÁRIO (valor
+ * de tabela) dos pedidos com Data E-mail na janela, inclusive os ainda sem
+ * Nº Ped./lançamento. Realizado = Valor Líquido somente dos pedidos com
+ * Nº Ped. preenchido (regra contábil). Cancelados (marcador ou "cancel" em
+ * qualquer célula) não constam. RPIs vêm da aba Equipe; Thalles é venda própria.
  * Nenhum valor é inventado.
  */
 interface MetaLinha {
@@ -93,13 +92,23 @@ export default function Meta() {
     const ini = dataISO(janela.inicio);
     const fim = dataISO(janela.fim);
 
-    const noPeriodo = (v: Venda): boolean => {
+    const naJanela = (v: Venda): boolean => {
       const iso = dataISO(campo(v, 'Data E-mail'));
       if (iso === '' || iso < ini || iso > fim) return false;
       if (marcador(v) !== null) return false;
       if (canceladaEmAlgumaCelula(v)) return false;
-      return vlNumerico(v);
+      return true;
     };
+
+    /** Previsão: pedido com VALOR FORMULÁRIO numérico, mesmo sem Nº Ped./lançamento. */
+    const ehPrevisto = (v: Venda): boolean => {
+      if (!naJanela(v)) return false;
+      const s = campo(v, 'VALOR FORMULÁRIO');
+      return s !== '' && Number.isFinite(Number(s));
+    };
+
+    /** Realizado: só pedido com Nº Ped. preenchido (regra contábil). */
+    const ehRealizado = (v: Venda): boolean => naJanela(v) && ehContabil(v);
 
     for (const def of META_DEFS) {
       const codigos = def.tipo === 'proprio' ? new Set<string>([String(def.codigo ?? '')]) : (porResp.get(normalizarNome(def.responsavel)) ?? new Set<string>());
@@ -109,17 +118,21 @@ export default function Meta() {
       let previsto = 0;
       let pedidos = 0;
       for (const v of vendas) {
-        if (!noPeriodo(v)) continue;
+        if (!naJanela(v)) continue;
         const cod = campo(v, 'COD. VENDEDOR');
         if (cod === '' || !codigos.has(cod)) continue;
         const a = acumulado.get(cod) ?? { valor: 0, previsto: 0, pedidos: 0 };
-        a.valor += valorLiquido(v);
-        a.previsto += valorFormulario(v);
-        a.pedidos += 1;
+        if (ehPrevisto(v)) {
+          a.previsto += valorFormulario(v);
+          a.pedidos += 1;
+          previsto += valorFormulario(v);
+          pedidos += 1;
+        }
+        if (ehRealizado(v)) {
+          a.valor += valorLiquido(v);
+          realizado += valorLiquido(v);
+        }
         acumulado.set(cod, a);
-        realizado += valorLiquido(v);
-        previsto += valorFormulario(v);
-        pedidos += 1;
       }
 
       const listaRpi = [...codigos].filter(Boolean);
@@ -172,8 +185,9 @@ export default function Meta() {
           <h2>Meta</h2>
           <p>
             Janela de {janela.inicio} a {janela.fim} (calendário) • pelo campo Data E-mail • previsto = VALOR FORMULÁRIO
-            (valor de tabela) • realizado = Valor Líquido • inclui pedidos ainda sem Nº Ped./lançamento • cancelado,
-            bonificação, expositor e troca não contam • equipes conforme aba Equipe • metas definidas pelo gestor
+            (valor de tabela) dos pedidos da janela, mesmo sem Nº Ped./lançamento • realizado = Valor Líquido somente com
+            Nº Ped. preenchido • cancelado, bonificação, expositor e troca não contam • equipes conforme aba Equipe •
+            metas definidas pelo gestor
           </p>
         </div>
       </div>
