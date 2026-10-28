@@ -31,14 +31,16 @@ export const META_DEFS: MetaDef[] = [
     responsavel: 'Josimar',
     valor: 300000,
     tipo: 'equipe',
-    codigosExtra: ['24', '5085', '47', '1201'],
+    // 47 e 1201 já constam sob Josimar na aba Equipe; aqui ficam só os ausentes.
+    codigosExtra: ['24', '5085'],
     nomesExtra: { '24': 'WAGNER LINS REGIAO SUL', '5085': 'WAGNER LINS - COLIBRI/COLMEIA' },
   },
   {
     responsavel: 'Cristiano',
     valor: 165000,
     tipo: 'equipe',
-    codigosExtra: ['8129', '990', '9988'],
+    // 990 ainda consta sob Jean na aba Equipe, mas pertence ao Cristiano (decisão do gestor).
+    codigosExtra: ['8129', '990'],
     nomesExtra: { '8129': 'THIAGO TROPEIA' },
   },
   { responsavel: 'Thalles', valor: 20000, tipo: 'proprio', rpi: 'THALLES AFONSO', codigo: '1313' },

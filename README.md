@@ -15,7 +15,7 @@ da planilha mestre** via Google Apps Script — nenhum dado fictício ou mock.
 | `/meta` | Meta | Metas por responsável: previsto × realizado na janela 26 → fim do mês |
 | `/oportunidades` | Oportunidades | Kanban de clientes/reativação (grava C/N na planilha) |
 | `/atividades` | Atividades | Um pedido = uma atividade, com filtro por data |
-| `/equipe` | Equipe | RPIs e responsáveis com receita/pedidos |
+| `/equipe` | Equipe | Cadastro da aba Equipe (nomes, UF e responsável) com pedidos/receita por código |
 | `/config` | Configurações | Token de escrita da API |
 
 ## Fonte de dados

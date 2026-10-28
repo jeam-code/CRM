@@ -281,48 +281,6 @@ export function derivarAtividades(vendas: Venda[]): Atividade[] {
   }));
 }
 
-/* -------------------------------- Equipe ------------------------------- */
-
-export interface MembroEquipe {
-  nome: string;
-  origem: 'RPI' | 'RESP.';
-  codigoVendedor: string;
-  pedidos: number;
-  receita: number;
-  ufs: number;
-}
-
-export function derivarEquipe(vendas: Venda[]): MembroEquipe[] {
-  const mapa = new Map<string, { membro: MembroEquipe; ufSet: Set<string> }>();
-  const somar = (nome: string, origem: 'RPI' | 'RESP.', v: Venda) => {
-    const limpo = nome.trim();
-    if (!limpo) return;
-    const chave = `${origem}:${limpo.toLowerCase()}`;
-    let entry = mapa.get(chave);
-    if (!entry) {
-      entry = {
-        membro: { nome: limpo, origem, codigoVendedor: campo(v, 'COD. VENDEDOR'), pedidos: 0, receita: 0, ufs: 0 },
-        ufSet: new Set<string>(),
-      };
-      mapa.set(chave, entry);
-    }
-    entry.membro.pedidos += ehContabil(v) ? 1 : 0;
-    if (ehContabil(v)) entry.membro.receita += valorLiquido(v);
-    const uf = campo(v, 'UF');
-    if (uf) entry.ufSet.add(uf);
-    if (!entry.membro.codigoVendedor) entry.membro.codigoVendedor = campo(v, 'COD. VENDEDOR');
-  };
-  for (const v of vendas) {
-    if (!ehLinhaValida(v)) continue;
-    somar(campo(v, 'RPI'), 'RPI', v);
-    const resp = campo(v, 'RESP.');
-    if (resp && resp.toLowerCase() !== campo(v, 'RPI').toLowerCase()) somar(resp, 'RESP.', v);
-  }
-  return [...mapa.values()]
-    .map(({ membro, ufSet }) => ({ ...membro, ufs: ufSet.size }))
-    .sort((a, b) => b.receita - a.receita);
-}
-
 /* --------------------------- Resumo Diário --------------------------- */
 
 export interface DiaResumo {
