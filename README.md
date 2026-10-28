@@ -49,8 +49,8 @@ da planilha mestre** via Google Apps Script — nenhum dado fictício ou mock.
   Nº Ped./lançamento; **Realizado** = `Valor Líquido` somente com Nº Ped. preenchido;
   cancelado/bonificação/expositor/troca não contam.
   - Josimar e Cristiano: soma das vendas dos RPIs que cada um responde na aba **Equipe**
-    (cruzamento exato `Equipe.CODIGO` = `COD. VENDEDOR`), mais códigos avulsos definidos em
-    `src/lib/metas.ts` (ex.: 24 e 5085 no Josimar, 8129 no Cristiano).
+    (cruzamento exato `Equipe.CODIGO` = `COD. VENDEDOR`), mais os códigos avulsos definidos em
+    `src/lib/metas.ts` (correções de responsável e variações de código).
   - Thalles: vendas próprias (RPI `THALLES AFONSO`, `COD. VENDEDOR` 1313).
   - Valores e responsáveis editáveis em `src/lib/metas.ts`.
 

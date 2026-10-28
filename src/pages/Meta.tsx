@@ -89,6 +89,7 @@ export default function Meta() {
     // responsável (normalizado) → códigos de vendedor da aba Equipe
     const porResp = new Map<string, Set<string>>();
     const respOriginalPorCod = new Map<string, string>();
+    const nomePorCod = new Map<string, string>();
     for (const reg of equipe) {
       const resp = normalizarNome(reg['RESPONSAVEL']);
       const respOriginal = String(reg['RESPONSAVEL'] ?? '').trim();
@@ -97,6 +98,7 @@ export default function Meta() {
       if (!porResp.has(resp)) porResp.set(resp, new Set());
       porResp.get(resp)!.add(cod);
       respOriginalPorCod.set(cod, respOriginal);
+      nomePorCod.set(cod, String(reg['VENDEDOR'] ?? '').trim());
     }
 
     const ini = dataISO(janela.inicio);
@@ -157,7 +159,7 @@ export default function Meta() {
         linhasRpi.push({
           responsavel: def.responsavel,
           codigo: cod,
-          nome: (def.tipo === 'proprio' ? def.rpi : '') || `COD ${cod}`,
+          nome: (def.tipo === 'proprio' ? def.rpi : '') || nomePorCod.get(cod) || def.nomesExtra?.[cod] || `COD ${cod}`,
           previsto: a.previsto,
           realizado: a.valor,
           pedidos: a.pedidos,
