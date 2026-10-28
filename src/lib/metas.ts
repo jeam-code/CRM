@@ -17,10 +17,15 @@ export interface MetaDef {
   rpi?: string;
   /** Para tipo 'proprio': COD. VENDEDOR do RPI (cruzamento exato). */
   codigo?: string;
+  /**
+   * Códigos de venda que NÃO estão na aba Equipe mas pertencem a este
+   * responsável (ex.: variações de código do mesmo vendedor).
+   */
+  codigosExtra?: string[];
 }
 
 export const META_DEFS: MetaDef[] = [
-  { responsavel: 'Josimar', valor: 300000, tipo: 'equipe' },
-  { responsavel: 'Cristiano', valor: 165000, tipo: 'equipe' },
+  { responsavel: 'Josimar', valor: 300000, tipo: 'equipe', codigosExtra: ['24', '5085'] },
+  { responsavel: 'Cristiano', valor: 165000, tipo: 'equipe', codigosExtra: ['8129'] },
   { responsavel: 'Thalles', valor: 20000, tipo: 'proprio', rpi: 'THALLES AFONSO', codigo: '1313' },
 ];

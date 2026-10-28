@@ -36,6 +36,13 @@ interface LinhaRpi {
   pedidos: number;
 }
 
+interface LinhaOutro {
+  responsavel: string;
+  previsto: number;
+  realizado: number;
+  pedidos: number;
+}
+
 const pctTxt = (pct: number): string => `${pct.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
 
 /** Cancelamento em qualquer célula da linha — na Meta, cancelado não pode constar. */
@@ -75,18 +82,21 @@ export default function Meta() {
     };
   }, []);
 
-  const { linhas, detalhes } = useMemo(() => {
+  const { linhas, detalhes, outros } = useMemo(() => {
     const linhasMeta: MetaLinha[] = [];
     const linhasRpi: LinhaRpi[] = [];
 
     // responsável (normalizado) → códigos de vendedor da aba Equipe
     const porResp = new Map<string, Set<string>>();
+    const respOriginalPorCod = new Map<string, string>();
     for (const reg of equipe) {
       const resp = normalizarNome(reg['RESPONSAVEL']);
+      const respOriginal = String(reg['RESPONSAVEL'] ?? '').trim();
       const cod = String(reg['CODIGO'] ?? '').trim();
       if (resp === '' || cod === '') continue;
       if (!porResp.has(resp)) porResp.set(resp, new Set());
       porResp.get(resp)!.add(cod);
+      respOriginalPorCod.set(cod, respOriginal);
     }
 
     const ini = dataISO(janela.inicio);
@@ -110,8 +120,14 @@ export default function Meta() {
     /** Realizado: só pedido com Nº Ped. preenchido (regra contábil). */
     const ehRealizado = (v: Venda): boolean => naJanela(v) && ehContabil(v);
 
+    const cobertos = new Set<string>();
     for (const def of META_DEFS) {
-      const codigos = def.tipo === 'proprio' ? new Set<string>([String(def.codigo ?? '')]) : (porResp.get(normalizarNome(def.responsavel)) ?? new Set<string>());
+      const base =
+        def.tipo === 'proprio'
+          ? new Set<string>([String(def.codigo ?? '')])
+          : porResp.get(normalizarNome(def.responsavel)) ?? new Set<string>();
+      const codigos = new Set<string>([...base, ...(def.codigosExtra ?? []).map(String)]);
+      for (const c of codigos) cobertos.add(c);
 
       const acumulado = new Map<string, { valor: number; previsto: number; pedidos: number }>();
       let realizado = 0;
@@ -159,7 +175,25 @@ export default function Meta() {
         pct: def.valor > 0 ? (realizado / def.valor) * 100 : 0,
       });
     }
-    return { linhas: linhasMeta, detalhes: linhasRpi };
+
+    // Pedidos da janela que não pertencem a nenhuma meta (ex.: Jean) — informativo.
+    const outrosMap = new Map<string, LinhaOutro>();
+    for (const v of vendas) {
+      if (!naJanela(v)) continue;
+      const cod = campo(v, 'COD. VENDEDOR');
+      if (cod === '' || cobertos.has(cod)) continue;
+      const chave = respOriginalPorCod.get(cod) ?? `Sem responsável (cod ${cod})`;
+      const o = outrosMap.get(chave) ?? { responsavel: chave, previsto: 0, realizado: 0, pedidos: 0 };
+      if (ehPrevisto(v)) {
+        o.previsto += valorFormulario(v);
+        o.pedidos += 1;
+      }
+      if (ehRealizado(v)) o.realizado += valorLiquido(v);
+      outrosMap.set(chave, o);
+    }
+    const outros = [...outrosMap.values()].sort((a, b) => b.previsto - a.previsto);
+
+    return { linhas: linhasMeta, detalhes: linhasRpi, outros };
   }, [equipe, vendas, janela]);
 
   if (vendasCarregando || equipeCarregando) return <div className="estado">Carregando metas da API…</div>;
@@ -186,8 +220,8 @@ export default function Meta() {
           <p>
             Janela de {janela.inicio} a {janela.fim} (calendário) • pelo campo Data E-mail • previsto = VALOR FORMULÁRIO
             (valor de tabela) dos pedidos da janela, mesmo sem Nº Ped./lançamento • realizado = Valor Líquido somente com
-            Nº Ped. preenchido • cancelado, bonificação, expositor e troca não contam • equipes conforme aba Equipe •
-            metas definidas pelo gestor
+            Nº Ped. preenchido • cancelado, bonificação, expositor e troca não contam • equipes conforme aba Equipe (+
+            códigos avulsos em metas.ts) • metas definidas pelo gestor
           </p>
         </div>
       </div>
@@ -246,6 +280,36 @@ export default function Meta() {
           </tbody>
         </table>
       </div>
+
+      {outros.length > 0 && (
+        <div className="painel">
+          <h3>Fora das metas (sem meta definida)</h3>
+          <p className="sub">
+            Informativo — pedidos com Data E-mail na janela que não pertencem aos responsáveis acima e não entram no
+            cálculo das metas.
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>Responsável</th>
+                <th className="direita">Pedidos</th>
+                <th className="direita">Previsto</th>
+                <th className="direita">Realizado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {outros.map((o) => (
+                <tr key={o.responsavel}>
+                  <td>{o.responsavel}</td>
+                  <td className="direita">{numero(o.pedidos)}</td>
+                  <td className="direita">{moeda(o.previsto)}</td>
+                  <td className="direita">{moeda(o.realizado)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
