@@ -198,6 +198,31 @@ export default function Meta() {
     return { linhas: linhasMeta, detalhes: linhasRpi, outros };
   }, [equipe, vendas, janela]);
 
+  /** Fechamento geral: soma das metas individuais e dos totais da janela. */
+  const totais = useMemo(() => {
+    const meta = linhas.reduce((s, l) => s + l.meta, 0);
+    const nRpis = linhas.reduce((s, l) => s + l.nRpis, 0);
+    const previsto = linhas.reduce((s, l) => s + l.previsto, 0);
+    const realizado = linhas.reduce((s, l) => s + l.realizado, 0);
+    return {
+      meta,
+      nRpis,
+      previsto,
+      realizado,
+      falta: Math.max(0, meta - realizado),
+      pct: meta > 0 ? (realizado / meta) * 100 : 0,
+    };
+  }, [linhas]);
+
+  const totaisRpi = useMemo(
+    () => ({
+      pedidos: detalhes.reduce((s, d) => s + d.pedidos, 0),
+      previsto: detalhes.reduce((s, d) => s + d.previsto, 0),
+      realizado: detalhes.reduce((s, d) => s + d.realizado, 0),
+    }),
+    [detalhes],
+  );
+
   if (vendasCarregando || equipeCarregando) return <div className="estado">Carregando metas da API…</div>;
   if (vendasErro || equipeErro) {
     return (
@@ -254,7 +279,22 @@ export default function Meta() {
               </tr>
             ))}
           </tbody>
+          <tfoot>
+            <tr>
+              <td>Meta Geral (fechamento)</td>
+              <td className="direita">{numero(totais.nRpis)}</td>
+              <td className="direita">{moeda(totais.meta)}</td>
+              <td className="direita">{moeda(totais.previsto)}</td>
+              <td className="destaque">{moeda(totais.realizado)}</td>
+              <td className="direita">{pctTxt(totais.pct)}</td>
+              <td className="direita">{moeda(totais.falta)}</td>
+            </tr>
+          </tfoot>
         </table>
+        <p className="sub">
+          Meta Geral = soma das metas de Josimar, Cristiano e Thalles. Fechamento parcial da janela de {janela.inicio} a{' '}
+          {janela.fim}.
+        </p>
       </div>
 
       <div className="painel">
@@ -280,6 +320,16 @@ export default function Meta() {
               </tr>
             ))}
           </tbody>
+          <tfoot>
+            <tr>
+              <td colSpan={2} className="direita">
+                Total (soma de tudo)
+              </td>
+              <td className="direita">{numero(totaisRpi.pedidos)}</td>
+              <td className="direita">{moeda(totaisRpi.previsto)}</td>
+              <td className="direita">{moeda(totaisRpi.realizado)}</td>
+            </tr>
+          </tfoot>
         </table>
       </div>
 
