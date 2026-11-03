@@ -25,6 +25,19 @@ function buildUrl(params: Record<string, string>): string {
   return `${API_BASE_URL}?${qs}`;
 }
 
+/** O Apps Script às vezes segura a conexão; sem timeout a tela fica "Carregando…" para sempre. */
+const FETCH_TIMEOUT_MS = 20000;
+
+async function fetchComTimeout(input: string, init?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function parseJson(res: Response): Promise<unknown> {
   const text = await res.text();
   try {
@@ -46,7 +59,7 @@ function assertOk(payload: unknown): asserts payload is { ok: boolean; erro?: st
 
 async function get<T>(params: Record<string, string>): Promise<T> {
   const token = getApiToken();
-  const res = await fetch(buildUrl(token ? { ...params, token } : params));
+  const res = await fetchComTimeout(buildUrl(token ? { ...params, token } : params));
   const payload = await parseJson(res);
   assertOk(payload);
   return payload as T;
@@ -54,7 +67,7 @@ async function get<T>(params: Record<string, string>): Promise<T> {
 
 async function post<T>(body: Record<string, unknown>): Promise<T> {
   const token = getApiToken();
-  const res = await fetch(API_BASE_URL, {
+  const res = await fetchComTimeout(API_BASE_URL, {
     method: 'POST',
     // text/plain evita o preflight CORS (OPTIONS) que o Apps Script não responde;
     // o corpo continua sendo JSON e o doPost faz JSON.parse do postData.contents.
