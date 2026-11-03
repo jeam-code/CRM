@@ -45,3 +45,9 @@ export const META_DEFS: MetaDef[] = [
   },
   { responsavel: 'Thalles', valor: 20000, tipo: 'proprio', rpi: 'THALLES AFONSO', codigo: '1313' },
 ];
+
+/**
+ * Meta geral do mês (grupo), definida pelo gestor.
+ * Não é a soma automática das metas individuais — é o objetivo do grupo.
+ */
+export const META_GERAL = 1_630_000;

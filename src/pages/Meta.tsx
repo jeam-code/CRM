@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listarTudo, type Registro } from '../lib/api';
-import { META_DEFS } from '../lib/metas';
+import { META_DEFS, META_GERAL } from '../lib/metas';
 import { campo, ehContabil, marcador, valorFormulario, valorLiquido } from '../lib/domain';
 import { dataISO, moeda, normalizarNome, numero } from '../lib/format';
 import { useVendasCtx } from '../state/VendasContext';
@@ -8,9 +8,10 @@ import type { Venda } from '../lib/domain';
 
 /**
  * Aba META — acompanhamento das metas por responsável.
- * Janela: ciclo atual da meta — começa no dia 26 (do mês anterior enquanto
- * ainda não chegou o dia 26) e vai até o último dia do mês corrente,
- * avaliada pela coluna "Data E-mail" das abas mensais. Previsto = VALOR FORMULÁRIO (valor
+ * Janela: ciclo fiscal 26 → 25 — começa no dia 26 do mês anterior e termina
+ * no dia 25 do mês de referência (antes do dia 26, o ciclo é o do mês corrente;
+ * a partir do dia 26, o do mês seguinte), avaliada pela coluna "Data E-mail"
+ * das abas mensais. Previsto = VALOR FORMULÁRIO (valor
  * de tabela) dos pedidos com Data E-mail na janela, inclusive os ainda sem
  * Nº Ped./lançamento. Realizado = Valor Líquido somente dos pedidos com
  * Nº Ped. preenchido (regra contábil). Cancelados (marcador ou "cancel" em
@@ -44,6 +45,8 @@ interface LinhaOutro {
   pedidos: number;
 }
 
+type CampoOrdemRpi = 'responsavel' | 'nome' | 'pedidos' | 'previsto' | 'realizado';
+
 const pctTxt = (pct: number): string => `${pct.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
 
 /** Cancelamento em qualquer célula da linha — na Meta, cancelado não pode constar. */
@@ -55,13 +58,18 @@ export default function Meta() {
   const [equipe, setEquipe] = useState<Registro[]>([]);
   const [equipeErro, setEquipeErro] = useState<string | null>(null);
   const [equipeCarregando, setEquipeCarregando] = useState(true);
+  const [ordemRpi, setOrdemRpi] = useState<{ campo: CampoOrdemRpi; dir: 'asc' | 'desc' }>({
+    campo: 'pedidos',
+    dir: 'desc',
+  });
 
   const janela = useMemo(() => {
     const hoje = new Date();
-    // Ciclo atual: antes do dia 26, o período começou no mês anterior.
-    const mesInicio = hoje.getDate() < 26 ? hoje.getMonth() - 1 : hoje.getMonth();
-    const inicio = new Date(hoje.getFullYear(), mesInicio, 26);
-    const fim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+    // Ciclo fiscal 26 → 25: antes do dia 26 o ciclo termina neste mês;
+    // a partir do dia 26 ele termina no mês seguinte.
+    const mesFim = hoje.getDate() >= 26 ? hoje.getMonth() + 1 : hoje.getMonth();
+    const inicio = new Date(hoje.getFullYear(), mesFim - 1, 26);
+    const fim = new Date(hoje.getFullYear(), mesFim, 25);
     const br = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
     return { inicio: br(inicio), fim: br(fim) };
   }, []);
@@ -201,19 +209,18 @@ export default function Meta() {
     return { linhas: linhasMeta, detalhes: linhasRpi, outros };
   }, [equipe, vendas, janela]);
 
-  /** Fechamento geral: soma das metas individuais e dos totais da janela. */
+  /** Fechamento geral: meta do grupo definida pelo gestor + totais da janela. */
   const totais = useMemo(() => {
-    const meta = linhas.reduce((s, l) => s + l.meta, 0);
     const nRpis = linhas.reduce((s, l) => s + l.nRpis, 0);
     const previsto = linhas.reduce((s, l) => s + l.previsto, 0);
     const realizado = linhas.reduce((s, l) => s + l.realizado, 0);
     return {
-      meta,
+      meta: META_GERAL,
       nRpis,
       previsto,
       realizado,
-      falta: Math.max(0, meta - realizado),
-      pct: meta > 0 ? (realizado / meta) * 100 : 0,
+      falta: Math.max(0, META_GERAL - realizado),
+      pct: META_GERAL > 0 ? (realizado / META_GERAL) * 100 : 0,
     };
   }, [linhas]);
 
@@ -224,6 +231,40 @@ export default function Meta() {
       realizado: detalhes.reduce((s, d) => s + d.realizado, 0),
     }),
     [detalhes],
+  );
+
+  const detalhesOrdenados = useMemo(() => {
+    const arr = [...detalhes];
+    const mult = ordemRpi.dir === 'asc' ? 1 : -1;
+    arr.sort((a, b) => {
+      if (ordemRpi.campo === 'responsavel' || ordemRpi.campo === 'nome') {
+        return mult * a[ordemRpi.campo].localeCompare(b[ordemRpi.campo], 'pt-BR');
+      }
+      return mult * (a[ordemRpi.campo] - b[ordemRpi.campo]);
+    });
+    return arr;
+  }, [detalhes, ordemRpi]);
+
+  const alternarOrdem = (campo: CampoOrdemRpi): void => {
+    setOrdemRpi((atual) =>
+      atual.campo === campo
+        ? { campo, dir: atual.dir === 'asc' ? 'desc' : 'asc' }
+        : {
+            campo,
+            dir: campo === 'pedidos' || campo === 'previsto' || campo === 'realizado' ? 'desc' : 'asc',
+          },
+    );
+  };
+
+  const thOrdenavel = (campo: CampoOrdemRpi, label: string, className?: string) => (
+    <th
+      className={className}
+      onClick={() => alternarOrdem(campo)}
+      style={{ cursor: 'pointer', userSelect: 'none' }}
+      title="Clique para ordenar"
+    >
+      {label} {ordemRpi.campo === campo ? (ordemRpi.dir === 'asc' ? '▲' : '▼') : ''}
+    </th>
   );
 
   if (vendasCarregando || equipeCarregando) return <div className="estado">Carregando metas da API…</div>;
@@ -248,7 +289,7 @@ export default function Meta() {
         <div>
           <h2>Meta</h2>
           <p>
-            Janela de {janela.inicio} a {janela.fim} (calendário) • pelo campo Data E-mail • previsto = VALOR FORMULÁRIO
+            Janela de {janela.inicio} a {janela.fim} (ciclo 26 → 25) • pelo campo Data E-mail • previsto = VALOR FORMULÁRIO
             (valor de tabela) dos pedidos da janela, mesmo sem Nº Ped./lançamento • realizado = Valor Líquido somente com
             Nº Ped. preenchido • cancelado, bonificação, expositor e troca não contam • equipes conforme aba Equipe (+
             códigos avulsos em metas.ts) • metas definidas pelo gestor
@@ -295,25 +336,26 @@ export default function Meta() {
           </tfoot>
         </table>
         <p className="sub">
-          Meta Geral = soma das metas de Josimar, Cristiano e Thalles. Fechamento parcial da janela de {janela.inicio} a{' '}
-          {janela.fim}.
+          Meta Geral de {moeda(META_GERAL)} definida pelo gestor; as metas individuais são acompanhamentos separados.
+          Fechamento parcial da janela de {janela.inicio} a {janela.fim}.
         </p>
       </div>
 
       <div className="painel">
         <h3>Por RPI (no período da meta)</h3>
+        <p className="sub">Clique nos títulos das colunas para ordenar — por padrão, mais pedidos primeiro.</p>
         <table>
           <thead>
             <tr>
-              <th>Responsável</th>
-              <th>RPI</th>
-              <th className="direita">Pedidos</th>
-              <th className="direita">Previsto</th>
-              <th className="direita">Realizado</th>
+              {thOrdenavel('responsavel', 'Responsável')}
+              {thOrdenavel('nome', 'RPI')}
+              {thOrdenavel('pedidos', 'Pedidos', 'direita')}
+              {thOrdenavel('previsto', 'Previsto', 'direita')}
+              {thOrdenavel('realizado', 'Realizado', 'direita')}
             </tr>
           </thead>
           <tbody>
-            {detalhes.map((d) => (
+            {detalhesOrdenados.map((d) => (
               <tr key={`${d.responsavel}-${d.codigo}`}>
                 <td>{d.responsavel}</td>
                 <td>{d.nome}</td>

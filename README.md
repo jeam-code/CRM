@@ -44,7 +44,8 @@ da planilha mestre** via Google Apps Script — nenhum dado fictício ou mock.
 - **`VALOR FORMULÁRIO` é bruto (tabela)** — nunca é somado como receita.
 - **Fechamento fiscal: dia 26 → dia 25** (o Dashboard exibe a janela lida do relatório).
 - **Clientes por CNPJ**: reativação a partir de 60 dias sem comprar; inativos contados acima de 90.
-- **Meta** (`/meta`): janela do dia 26 até o último dia do mês corrente, avaliada pela **Data E-mail**.
+- **Meta** (`/meta`): janela do ciclo fiscal **26 → 25** (antes do dia 26, o ciclo é o do mês
+  corrente; a partir do dia 26, o do mês seguinte), avaliada pela **Data E-mail**.
   **Previsto** = `VALOR FORMULÁRIO` (tabela) dos pedidos com Data E-mail na janela, inclusive sem
   Nº Ped./lançamento; **Realizado** = `Valor Líquido` somente com Nº Ped. preenchido;
   cancelado/bonificação/expositor/troca não contam.
@@ -53,6 +54,8 @@ da planilha mestre** via Google Apps Script — nenhum dado fictício ou mock.
     `src/lib/metas.ts` (correções de responsável e variações de código).
   - Thalles: vendas próprias (RPI `THALLES AFONSO`, `COD. VENDEDOR` 1313).
   - Valores e responsáveis editáveis em `src/lib/metas.ts`.
+  - **Meta Geral**: R$ 1.630.000,00 definida pelo gestor; não é a soma automática das metas
+    individuais — as metas individuais são acompanhamentos separados.
 
 ## Rodar
 
