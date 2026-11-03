@@ -54,6 +54,8 @@ da planilha mestre** via Google Apps Script — nenhum dado fictício ou mock.
     `src/lib/metas.ts` (correções de responsável e variações de código).
   - Thalles: vendas próprias (RPI `THALLES AFONSO`, `COD. VENDEDOR` 1313).
   - Valores e responsáveis editáveis em `src/lib/metas.ts`.
+  - **Média/Pedido por RPI**: `Realizado ÷ pedidos com Nº Ped. preenchido`, exibida na tabela
+    “Por RPI” e ordenável junto com as demais colunas.
   - **Meta Geral**: R$ 1.630.000,00 definida pelo gestor; não é a soma automática das metas
     individuais — as metas individuais são acompanhamentos separados.
 

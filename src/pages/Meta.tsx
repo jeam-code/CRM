@@ -36,6 +36,8 @@ interface LinhaRpi {
   previsto: number;
   realizado: number;
   pedidos: number;
+  pedidosRealizados: number;
+  mediaPedido: number;
 }
 
 interface LinhaOutro {
@@ -45,7 +47,7 @@ interface LinhaOutro {
   pedidos: number;
 }
 
-type CampoOrdemRpi = 'responsavel' | 'nome' | 'pedidos' | 'previsto' | 'realizado';
+type CampoOrdemRpi = 'responsavel' | 'nome' | 'pedidos' | 'previsto' | 'realizado' | 'mediaPedido';
 
 const pctTxt = (pct: number): string => `${pct.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
 
@@ -142,7 +144,7 @@ export default function Meta() {
       const codigos = new Set<string>([...base, ...(def.codigosExtra ?? []).map(String)]);
       for (const c of codigos) cobertos.add(c);
 
-      const acumulado = new Map<string, { valor: number; previsto: number; pedidos: number }>();
+      const acumulado = new Map<string, { valor: number; previsto: number; pedidos: number; pedidosRealizados: number }>();
       let realizado = 0;
       let previsto = 0;
       let pedidos = 0;
@@ -150,7 +152,7 @@ export default function Meta() {
         if (!naJanela(v)) continue;
         const cod = campo(v, 'COD. VENDEDOR');
         if (cod === '' || !codigos.has(cod)) continue;
-        const a = acumulado.get(cod) ?? { valor: 0, previsto: 0, pedidos: 0 };
+        const a = acumulado.get(cod) ?? { valor: 0, previsto: 0, pedidos: 0, pedidosRealizados: 0 };
         if (ehPrevisto(v)) {
           a.previsto += valorFormulario(v);
           a.pedidos += 1;
@@ -159,6 +161,7 @@ export default function Meta() {
         }
         if (ehRealizado(v)) {
           a.valor += valorLiquido(v);
+          a.pedidosRealizados += 1;
           realizado += valorLiquido(v);
         }
         acumulado.set(cod, a);
@@ -166,7 +169,7 @@ export default function Meta() {
 
       const listaRpi = [...codigos].filter(Boolean);
       for (const cod of listaRpi) {
-        const a = acumulado.get(cod) ?? { valor: 0, previsto: 0, pedidos: 0 };
+        const a = acumulado.get(cod) ?? { valor: 0, previsto: 0, pedidos: 0, pedidosRealizados: 0 };
         linhasRpi.push({
           responsavel: def.responsavel,
           codigo: cod,
@@ -174,6 +177,8 @@ export default function Meta() {
           previsto: a.previsto,
           realizado: a.valor,
           pedidos: a.pedidos,
+          pedidosRealizados: a.pedidosRealizados,
+          mediaPedido: a.pedidosRealizados > 0 ? a.valor / a.pedidosRealizados : 0,
         });
       }
 
@@ -224,14 +229,17 @@ export default function Meta() {
     };
   }, [linhas]);
 
-  const totaisRpi = useMemo(
-    () => ({
+  const totaisRpi = useMemo(() => {
+    const realizado = detalhes.reduce((s, d) => s + d.realizado, 0);
+    const pedidosRealizados = detalhes.reduce((s, d) => s + d.pedidosRealizados, 0);
+    return {
       pedidos: detalhes.reduce((s, d) => s + d.pedidos, 0),
       previsto: detalhes.reduce((s, d) => s + d.previsto, 0),
-      realizado: detalhes.reduce((s, d) => s + d.realizado, 0),
-    }),
-    [detalhes],
-  );
+      realizado,
+      pedidosRealizados,
+      mediaPedido: pedidosRealizados > 0 ? realizado / pedidosRealizados : 0,
+    };
+  }, [detalhes]);
 
   const detalhesOrdenados = useMemo(() => {
     const arr = [...detalhes];
@@ -251,7 +259,10 @@ export default function Meta() {
         ? { campo, dir: atual.dir === 'asc' ? 'desc' : 'asc' }
         : {
             campo,
-            dir: campo === 'pedidos' || campo === 'previsto' || campo === 'realizado' ? 'desc' : 'asc',
+            dir:
+              campo === 'pedidos' || campo === 'previsto' || campo === 'realizado' || campo === 'mediaPedido'
+                ? 'desc'
+                : 'asc',
           },
     );
   };
@@ -343,7 +354,10 @@ export default function Meta() {
 
       <div className="painel">
         <h3>Por RPI (no período da meta)</h3>
-        <p className="sub">Clique nos títulos das colunas para ordenar — por padrão, mais pedidos primeiro.</p>
+        <p className="sub">
+          Clique nos títulos das colunas para ordenar — por padrão, mais pedidos primeiro. Média/Pedido = Realizado ÷
+          pedidos com Nº Ped. preenchido.
+        </p>
         <table>
           <thead>
             <tr>
@@ -352,6 +366,7 @@ export default function Meta() {
               {thOrdenavel('pedidos', 'Pedidos', 'direita')}
               {thOrdenavel('previsto', 'Previsto', 'direita')}
               {thOrdenavel('realizado', 'Realizado', 'direita')}
+              {thOrdenavel('mediaPedido', 'Média/Pedido', 'direita')}
             </tr>
           </thead>
           <tbody>
@@ -362,6 +377,7 @@ export default function Meta() {
                 <td className="direita">{numero(d.pedidos)}</td>
                 <td className="direita">{moeda(d.previsto)}</td>
                 <td className="direita">{moeda(d.realizado)}</td>
+                <td className="direita">{moeda(d.mediaPedido)}</td>
               </tr>
             ))}
           </tbody>
@@ -373,6 +389,7 @@ export default function Meta() {
               <td className="direita">{numero(totaisRpi.pedidos)}</td>
               <td className="direita">{moeda(totaisRpi.previsto)}</td>
               <td className="direita">{moeda(totaisRpi.realizado)}</td>
+              <td className="direita">{moeda(totaisRpi.mediaPedido)}</td>
             </tr>
           </tfoot>
         </table>
