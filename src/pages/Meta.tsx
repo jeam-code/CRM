@@ -8,8 +8,9 @@ import type { Venda } from '../lib/domain';
 
 /**
  * Aba META — acompanhamento das metas por responsável.
- * Janela: dia 26 → último dia do mês corrente (calendário), avaliada pela
- * coluna "Data E-mail" das abas mensais. Previsto = VALOR FORMULÁRIO (valor
+ * Janela: ciclo atual da meta — começa no dia 26 (do mês anterior enquanto
+ * ainda não chegou o dia 26) e vai até o último dia do mês corrente,
+ * avaliada pela coluna "Data E-mail" das abas mensais. Previsto = VALOR FORMULÁRIO (valor
  * de tabela) dos pedidos com Data E-mail na janela, inclusive os ainda sem
  * Nº Ped./lançamento. Realizado = Valor Líquido somente dos pedidos com
  * Nº Ped. preenchido (regra contábil). Cancelados (marcador ou "cancel" em
@@ -57,7 +58,9 @@ export default function Meta() {
 
   const janela = useMemo(() => {
     const hoje = new Date();
-    const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 26);
+    // Ciclo atual: antes do dia 26, o período começou no mês anterior.
+    const mesInicio = hoje.getDate() < 26 ? hoje.getMonth() - 1 : hoje.getMonth();
+    const inicio = new Date(hoje.getFullYear(), mesInicio, 26);
     const fim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
     const br = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
     return { inicio: br(inicio), fim: br(fim) };
