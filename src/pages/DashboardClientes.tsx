@@ -90,28 +90,28 @@ export default function DashboardClientes() {
           valor={numero(base.length)}
           detalhe="base atualizada"
           icone={<UserRound />}
-          tom="azul"
+          tom="info"
         />
         <Card
           rotulo="Ativos (60 dias)"
           valor={numero(ativos60)}
           detalhe="compraram nos últimos 60 dias"
           icone={<CircleCheck />}
-          tom="verde"
+          tom="success"
         />
         <Card
           rotulo="Inativos (90+ dias)"
           valor={numero(inativos90)}
           detalhe="prioridade de reativação"
           icone={<UserRoundX />}
-          tom="laranja"
+          tom="warning"
         />
         <Card
           rotulo="Ticket por cliente"
           valor={moeda(base.length > 0 ? receitaTotal / base.length : 0)}
           detalhe={`${moeda(receitaTotal)} no ano`}
           icone={<Receipt />}
-          tom="roxo"
+          tom="purple"
         />
       </div>
 

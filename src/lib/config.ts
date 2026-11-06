@@ -20,11 +20,13 @@ export const MESES = [
   'AGOSTO',
   'SETEMBRO',
   'OUTUBRO',
+  'NOVEMBRO',
+  'DEZEMBRO',
 ] as const;
 
 export type Mes = (typeof MESES)[number];
 
-/** Nomes de mês válidos — abas novas como NOVEMBRO/DEZEMBRO são reconhecidas automaticamente. */
+/** Nomes de mês válidos nas conexões da planilha mestre. */
 export const NOMES_MESES_ANO = [
   'JANEIRO',
   'FEVEREIRO',

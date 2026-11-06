@@ -52,10 +52,15 @@ da planilha mestre** via Google Apps Script — nenhum dado fictício ou mock.
   - Josimar e Cristiano: soma das vendas dos RPIs que cada um responde na aba **Equipe**
     (cruzamento exato `Equipe.CODIGO` = `COD. VENDEDOR`), mais os códigos avulsos definidos em
     `src/lib/metas.ts` (correções de responsável e variações de código).
+  - Wendel Santana (código 79) e Wendel Santana 2 (código 238) contam para **Josimar**.
   - Thalles: vendas próprias (RPI `THALLES AFONSO`, `COD. VENDEDOR` 1313).
   - Valores e responsáveis editáveis em `src/lib/metas.ts`.
+  - **Responsáveis sem meta**: lista configurável em `SEM_META` (`src/lib/metas.ts`), atualmente
+    **Junior**, **Atacado** e **Responsável Interno**. Aparecem em painel informativo com RPIs, pedidos, previsto e
+    realizado, mas **não entram no cálculo da Meta Geral**. Para incluir novos nomes, basta
+    adicioná-los à lista.
   - **Média/Pedido por RPI**: `Realizado ÷ pedidos com Nº Ped. preenchido`, exibida na tabela
-    “Por RPI” e ordenável junto com as demais colunas.
+    “Por RPI” (somente responsáveis com meta) e ordenável junto com as demais colunas.
   - **Meta Geral**: R$ 1.630.000,00 definida pelo gestor; não é a soma automática das metas
     individuais — as metas individuais são acompanhamentos separados.
 

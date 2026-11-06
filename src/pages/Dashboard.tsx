@@ -337,28 +337,28 @@ export default function Dashboard() {
           valor={moeda(resumoDia.final)}
           detalhe={`relatório • ${rotuloFonte}`}
           icone={<Banknote />}
-          tom="vermelho"
+          tom="brand"
         />
         <Card
           rotulo="Lançamentos"
           valor={numero(resumoDia.lanc)}
           detalhe={`relatório • ${rotuloFonte}`}
           icone={<ClipboardList />}
-          tom="azul"
+          tom="info"
         />
         <Card
           rotulo="Ticket médio"
           valor={moeda(resumoDia.ticket)}
           detalhe="valor final ÷ lançamentos"
           icone={<Receipt />}
-          tom="roxo"
+          tom="purple"
         />
         <Card
           rotulo="Clientes recorrentes"
           valor={moeda(clientesAntigos.valorFinal)}
           detalhe={`${numero(clientesAntigos.qtd)} pedidos • relatório • sem abertura por dia`}
           icone={<UsersRound />}
-          tom="verde"
+          tom="success"
         />
       </div>
 
@@ -368,37 +368,37 @@ export default function Dashboard() {
           valor={moeda(clientesNovos.valorFinal)}
           detalhe={`${numero(clientesNovos.qtd)} pedidos • relatório • sem abertura por dia`}
           icone={<UserPlus />}
-          tom="ambar"
+          tom="warning"
         />
         <Card
           rotulo="Aguardando lançamento"
           valor={moeda(resumoMes.aguardValor)}
           detalhe={`${numero(resumoMes.aguardQtd)} pendentes • sem abertura por dia`}
           icone={<Clock />}
-          tom="ciano"
+          tom="info"
         />
         <Card
           rotulo="Cancelados"
           valor={numero(resumoMes.cancelQtd)}
           detalhe={`${moeda(resumoMes.cancelValor)} • sem abertura por dia`}
           icone={<Ban />}
-          tom="laranja"
+          tom="error"
         />
         <Card
           rotulo="Expositores"
           valor={numero(resumoMes.exposQtd)}
           detalhe="só quantidade • sem abertura por dia"
           icone={<Store />}
-          tom="azul"
+          tom="info"
         />
         <Card
           rotulo="Bonificação"
           valor={numero(resumoMes.bonifQtd)}
           detalhe={`${moeda(resumoMes.bonifValor)} • sem abertura por dia`}
           icone={<Gift />}
-          tom="roxo"
+          tom="purple"
         />
-        <Card rotulo="Trocas" valor={numero(trocas.length)} detalhe="abas • não somam" icone={<Repeat />} tom="rosa" />
+        <Card rotulo="Trocas" valor={numero(trocas.length)} detalhe="abas • não somam" icone={<Repeat />} tom="pink" />
       </div>
 
       <div className="painel">

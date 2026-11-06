@@ -16,7 +16,7 @@ import { numeroOuZero } from './format';
 
 export interface Venda extends Registro {
   _linha: number;
-  /** Aba mensal de origem (JANEIRO..OUTUBRO). Preenchido pelo carregamento. */
+  /** Aba mensal de origem (JANEIRO..DEZEMBRO). Preenchido pelo carregamento. */
   _mes: string;
   /** Valores crus das 4 primeiras colunas (posição) — para achar marcadores. */
   _primeiras?: string[];

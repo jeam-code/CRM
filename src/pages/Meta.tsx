@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listarTudo, type Registro } from '../lib/api';
-import { META_DEFS, META_GERAL } from '../lib/metas';
+import { META_DEFS, META_GERAL, SEM_META } from '../lib/metas';
 import { campo, ehContabil, marcador, valorFormulario, valorLiquido } from '../lib/domain';
 import { dataISO, moeda, normalizarNome, numero } from '../lib/format';
 import { useVendasCtx } from '../state/VendasContext';
@@ -47,6 +47,23 @@ interface LinhaOutro {
   pedidos: number;
 }
 
+interface LinhaSemMeta {
+  responsavel: string;
+  nRpis: number;
+  previsto: number;
+  realizado: number;
+  pedidos: number;
+}
+
+/** Recorte solicitado pelo gestor para o primeiro quadro da aba Meta. */
+interface LinhaPeriodoInicial {
+  responsavel: string;
+  meta: number | null;
+  pedidos: number;
+  valorLiquido: number;
+  pctRealizado: number | null;
+}
+
 type CampoOrdemRpi = 'responsavel' | 'nome' | 'pedidos' | 'previsto' | 'realizado' | 'mediaPedido';
 
 const pctTxt = (pct: number): string => `${pct.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
@@ -54,6 +71,13 @@ const pctTxt = (pct: number): string => `${pct.toLocaleString('pt-BR', { maximum
 /** Cancelamento em qualquer célula da linha — na Meta, cancelado não pode constar. */
 const canceladaEmAlgumaCelula = (v: Venda): boolean =>
   Object.values(v).some((x) => String(x ?? '').toLowerCase().includes('cancel'));
+
+/** "Responsável Interno" e "Interno" são o mesmo responsável na aba Meta. */
+const nomeResponsavelMeta = (nome: string): string => {
+  const limpo = nome.trim();
+  const normalizado = normalizarNome(limpo);
+  return normalizado === 'RESPONSAVEL INTERNO' || normalizado === 'INTERNO' ? 'Interno' : limpo;
+};
 
 export default function Meta() {
   const { vendas, carregando: vendasCarregando, erro: vendasErro, recarregar } = useVendasCtx();
@@ -76,6 +100,10 @@ export default function Meta() {
     return { inicio: br(inicio), fim: br(fim) };
   }, []);
 
+  // Este período é independente do ciclo 26 → 25 usado nos demais quadros.
+  // No consolidado inicial entram somente Data E-mail e Valor Líquido.
+  const periodoInicial = { inicio: '26/10/2026', fim: '31/10/2026' };
+
   useEffect(() => {
     let vivo = true;
     setEquipeCarregando(true);
@@ -95,7 +123,7 @@ export default function Meta() {
     };
   }, []);
 
-  const { linhas, detalhes, outros } = useMemo(() => {
+  const { linhas, detalhes, outros, semMeta } = useMemo(() => {
     const linhasMeta: MetaLinha[] = [];
     const linhasRpi: LinhaRpi[] = [];
 
@@ -136,13 +164,17 @@ export default function Meta() {
     const ehRealizado = (v: Venda): boolean => naJanela(v) && ehContabil(v);
 
     const cobertos = new Set<string>();
+    const metaCobertos = new Set<string>();
     for (const def of META_DEFS) {
       const base =
         def.tipo === 'proprio'
           ? new Set<string>([String(def.codigo ?? '')])
           : porResp.get(normalizarNome(def.responsavel)) ?? new Set<string>();
       const codigos = new Set<string>([...base, ...(def.codigosExtra ?? []).map(String)]);
-      for (const c of codigos) cobertos.add(c);
+      for (const c of codigos) {
+        metaCobertos.add(c);
+        cobertos.add(c);
+      }
 
       const acumulado = new Map<string, { valor: number; previsto: number; pedidos: number; pedidosRealizados: number }>();
       let realizado = 0;
@@ -173,7 +205,7 @@ export default function Meta() {
         linhasRpi.push({
           responsavel: def.responsavel,
           codigo: cod,
-          nome: (def.tipo === 'proprio' ? def.rpi : '') || nomePorCod.get(cod) || def.nomesExtra?.[cod] || `COD ${cod}`,
+          nome: (def.tipo === 'proprio' ? def.rpi : '') || def.nomesExtra?.[cod] || nomePorCod.get(cod) || `COD ${cod}`,
           previsto: a.previsto,
           realizado: a.valor,
           pedidos: a.pedidos,
@@ -194,6 +226,37 @@ export default function Meta() {
       });
     }
 
+    // Responsáveis sem meta (lista configurável em metas.ts) — informativo.
+    const semMeta: LinhaSemMeta[] = [];
+    const nomesSemMeta = [...new Set(SEM_META.map((n) => n.trim()).filter(Boolean))];
+    for (const nome of nomesSemMeta) {
+      const base = porResp.get(normalizarNome(nome)) ?? new Set<string>();
+      const codigos = new Set([...base].filter((cod) => !metaCobertos.has(cod)));
+      for (const cod of codigos) cobertos.add(cod);
+
+      let previsto = 0;
+      let realizado = 0;
+      let pedidos = 0;
+      for (const v of vendas) {
+        if (!naJanela(v)) continue;
+        const cod = campo(v, 'COD. VENDEDOR');
+        if (cod === '' || !codigos.has(cod)) continue;
+        if (ehPrevisto(v)) {
+          previsto += valorFormulario(v);
+          pedidos += 1;
+        }
+        if (ehRealizado(v)) realizado += valorLiquido(v);
+      }
+
+      semMeta.push({
+        responsavel: nome,
+        nRpis: codigos.size,
+        previsto,
+        realizado,
+        pedidos,
+      });
+    }
+
     // Pedidos da janela que não pertencem a nenhuma meta (ex.: Jean) — informativo.
     const outrosMap = new Map<string, LinhaOutro>();
     for (const v of vendas) {
@@ -211,8 +274,72 @@ export default function Meta() {
     }
     const outros = [...outrosMap.values()].sort((a, b) => b.previsto - a.previsto);
 
-    return { linhas: linhasMeta, detalhes: linhasRpi, outros };
+    return { linhas: linhasMeta, detalhes: linhasRpi, outros, semMeta };
   }, [equipe, vendas, janela]);
+
+  const consolidadoPeriodoInicial = useMemo(() => {
+    const responsavelPorCodigo = new Map<string, string>();
+    const responsaveis = new Map<string, LinhaPeriodoInicial>();
+    const registrar = (nome: string, meta: number | null = null): void => {
+      const exibicao = nomeResponsavelMeta(nome);
+      const chave = normalizarNome(exibicao);
+      if (chave === '') return;
+      const existente = responsaveis.get(chave);
+      if (existente) {
+        if (meta !== null) existente.meta = meta;
+        return;
+      }
+      responsaveis.set(chave, { responsavel: exibicao, meta, pedidos: 0, valorLiquido: 0, pctRealizado: null });
+    };
+
+    // Cadastro oficial: garante a presença de todos os responsáveis, mesmo sem venda no período.
+    for (const reg of equipe) {
+      const codigo = String(reg['CODIGO'] ?? '').trim();
+      const responsavel = nomeResponsavelMeta(String(reg['RESPONSAVEL'] ?? ''));
+      if (responsavel === '') continue;
+      registrar(responsavel);
+      if (codigo !== '') responsavelPorCodigo.set(codigo, responsavel);
+    }
+    for (const def of META_DEFS) {
+      registrar(def.responsavel, def.valor);
+      if (def.codigo) responsavelPorCodigo.set(String(def.codigo), def.responsavel);
+      for (const codigo of def.codigosExtra ?? []) responsavelPorCodigo.set(String(codigo), def.responsavel);
+    }
+    for (const nome of SEM_META) registrar(nome);
+
+    const inicio = dataISO(periodoInicial.inicio);
+    const fim = dataISO(periodoInicial.fim);
+    for (const venda of vendas) {
+      const data = dataISO(campo(venda, 'Data E-mail'));
+      if (data === '' || data < inicio || data > fim) continue;
+      const responsavel = responsavelPorCodigo.get(campo(venda, 'COD. VENDEDOR'));
+      if (!responsavel) continue;
+      const linha = responsaveis.get(normalizarNome(responsavel));
+      if (!linha) continue;
+      // Deliberadamente não usa Nº Ped., marcador, cancelamento ou valor de formulário.
+      linha.pedidos += 1;
+      linha.valorLiquido += valorLiquido(venda);
+    }
+
+    return [...responsaveis.values()]
+      .map((linha) => ({
+        ...linha,
+        pctRealizado: linha.meta !== null && linha.meta > 0 ? (linha.valorLiquido / linha.meta) * 100 : null,
+      }))
+      .sort((a, b) => b.valorLiquido - a.valorLiquido || a.responsavel.localeCompare(b.responsavel, 'pt-BR'));
+  }, [equipe, periodoInicial.fim, periodoInicial.inicio, vendas]);
+
+  const totaisPeriodoInicial = useMemo(() => {
+    const meta = consolidadoPeriodoInicial.reduce((soma, linha) => soma + (linha.meta ?? 0), 0);
+    const pedidos = consolidadoPeriodoInicial.reduce((soma, linha) => soma + linha.pedidos, 0);
+    const valorLiquido = consolidadoPeriodoInicial.reduce((soma, linha) => soma + linha.valorLiquido, 0);
+    return {
+      meta,
+      pedidos,
+      valorLiquido,
+      pctRealizado: meta > 0 ? (valorLiquido / meta) * 100 : 0,
+    };
+  }, [consolidadoPeriodoInicial]);
 
   /** Fechamento geral: meta do grupo definida pelo gestor + totais da janela. */
   const totais = useMemo(() => {
@@ -309,6 +436,45 @@ export default function Meta() {
       </div>
 
       <div className="painel">
+        <h3>Consolidado por responsável — {periodoInicial.inicio} a {periodoInicial.fim}</h3>
+        <p className="sub">
+          Recorte inicial da Meta: considera exclusivamente Data E-mail e Valor Líquido. Não aplica Nº Ped.,
+          marcador, cancelamento, previsto ou qualquer regra das demais abas.
+        </p>
+        <table className="consolidado-inicial">
+          <thead>
+            <tr>
+              <th>Responsável</th>
+              <th className="consolidado-valor">Meta</th>
+              <th className="consolidado-valor">Pedidos</th>
+              <th className="consolidado-valor">Valor Líquido</th>
+              <th className="consolidado-valor">% realizado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {consolidadoPeriodoInicial.map((linha) => (
+              <tr key={linha.responsavel}>
+                <td>{linha.responsavel}</td>
+                <td className="consolidado-valor">{linha.meta === null ? '—' : moeda(linha.meta)}</td>
+                <td className="consolidado-valor">{numero(linha.pedidos)}</td>
+                <td className="consolidado-valor destaque">{moeda(linha.valorLiquido)}</td>
+                <td className="consolidado-valor">{linha.pctRealizado === null ? '—' : pctTxt(linha.pctRealizado)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>Total</td>
+              <td className="consolidado-valor">{moeda(totaisPeriodoInicial.meta)}</td>
+              <td className="consolidado-valor">{numero(totaisPeriodoInicial.pedidos)}</td>
+              <td className="consolidado-valor destaque">{moeda(totaisPeriodoInicial.valorLiquido)}</td>
+              <td className="consolidado-valor">{pctTxt(totaisPeriodoInicial.pctRealizado)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div className="painel">
         <table>
           <thead>
             <tr>
@@ -348,15 +514,48 @@ export default function Meta() {
         </table>
         <p className="sub">
           Meta Geral de {moeda(META_GERAL)} definida pelo gestor; as metas individuais são acompanhamentos separados.
-          Fechamento parcial da janela de {janela.inicio} a {janela.fim}.
+          Fechamento parcial da janela de {janela.inicio} a {janela.fim}. Responsáveis sem meta aparecem no painel
+          abaixo e não entram no cálculo da Meta Geral.
         </p>
       </div>
+
+      {semMeta.length > 0 && (
+        <div className="painel">
+          <h3>Responsáveis sem meta (informativo)</h3>
+          <p className="sub">
+            Ainda sem meta definida neste primeiro momento — acompanhamento informativo, não entra no cálculo da Meta
+            Geral.
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>Responsável</th>
+                <th className="direita">RPIs</th>
+                <th className="direita">Pedidos</th>
+                <th className="direita">Previsto</th>
+                <th className="direita">Realizado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {semMeta.map((s) => (
+                <tr key={s.responsavel}>
+                  <td>{s.responsavel}</td>
+                  <td className="direita">{numero(s.nRpis)}</td>
+                  <td className="direita">{numero(s.pedidos)}</td>
+                  <td className="direita">{moeda(s.previsto)}</td>
+                  <td className="destaque">{moeda(s.realizado)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className="painel">
         <h3>Por RPI (no período da meta)</h3>
         <p className="sub">
           Clique nos títulos das colunas para ordenar — por padrão, mais pedidos primeiro. Média/Pedido = Realizado ÷
-          pedidos com Nº Ped. preenchido.
+          pedidos com Nº Ped. preenchido. Somente RPIs dos responsáveis com meta.
         </p>
         <table>
           <thead>
@@ -384,7 +583,7 @@ export default function Meta() {
           <tfoot>
             <tr>
               <td colSpan={2} className="direita">
-                Total (soma de tudo)
+                Total dos responsáveis com meta
               </td>
               <td className="direita">{numero(totaisRpi.pedidos)}</td>
               <td className="direita">{moeda(totaisRpi.previsto)}</td>
@@ -397,10 +596,10 @@ export default function Meta() {
 
       {outros.length > 0 && (
         <div className="painel">
-          <h3>Fora das metas (sem meta definida)</h3>
+          <h3>Fora das metas (não classificados)</h3>
           <p className="sub">
-            Informativo — pedidos com Data E-mail na janela que não pertencem aos responsáveis acima e não entram no
-            cálculo das metas.
+            Informativo — pedidos com Data E-mail na janela que não pertencem aos responsáveis com meta nem aos
+            responsáveis sem meta listados acima e não entram no cálculo das metas.
           </p>
           <table>
             <thead>

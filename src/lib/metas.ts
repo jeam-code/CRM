@@ -22,7 +22,7 @@ export interface MetaDef {
    * (variações de código do mesmo vendedor ou correção de responsável).
    */
   codigosExtra?: string[];
-  /** Nome exibido para códigos que não existem na aba Equipe. */
+  /** Nome exibido na tabela Por RPI para um código específico (sobrepõe o nome da Equipe). */
   nomesExtra?: Record<string, string>;
 }
 
@@ -31,9 +31,15 @@ export const META_DEFS: MetaDef[] = [
     responsavel: 'Josimar',
     valor: 300000,
     tipo: 'equipe',
-    // 47 e 1201 já constam sob Josimar na aba Equipe; aqui ficam só os ausentes.
-    codigosExtra: ['24', '5085'],
-    nomesExtra: { '24': 'WAGNER LINS REGIAO SUL', '5085': 'WAGNER LINS - COLIBRI/COLMEIA' },
+    // Wendel Santana (79) e Wendel Santana 2 (238) são ambos de Josimar,
+    // independentemente do cadastro que estiver momentaneamente na aba Equipe.
+    codigosExtra: ['24', '5085', '79', '238'],
+    nomesExtra: {
+      '24': 'WAGNER LINS REGIAO SUL',
+      '5085': 'WAGNER LINS - COLIBRI/COLMEIA',
+      '79': 'WENDEL SANTANA',
+      '238': 'WENDEL SANTANA 2',
+    },
   },
   {
     responsavel: 'Cristiano',
@@ -45,6 +51,13 @@ export const META_DEFS: MetaDef[] = [
   },
   { responsavel: 'Thalles', valor: 20000, tipo: 'proprio', rpi: 'THALLES AFONSO', codigo: '1313' },
 ];
+
+/**
+ * Responsáveis acompanhados sem meta definida neste primeiro momento.
+ * Aparecem no painel informativo da aba Meta, fora do cálculo da Meta Geral.
+ * Para incluir novos nomes, basta adicioná-los nesta lista.
+ */
+export const SEM_META: string[] = ['Junior', 'Atacado', 'Interno'];
 
 /**
  * Meta geral do mês (grupo), definida pelo gestor.

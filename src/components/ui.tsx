@@ -1,19 +1,20 @@
 import type { ReactNode } from 'react';
 import { RefreshCw } from 'lucide-react';
 
-/** Tons suaves usados nos ícones dos cards (cor do ícone + fundo claro). */
-export type Tom = 'vermelho' | 'azul' | 'roxo' | 'verde' | 'ambar' | 'ciano' | 'laranja' | 'rosa';
+/** Tons semânticos para ícones dos cards (cor do ícone + fundo tonal). */
+export type Tom = 'brand' | 'success' | 'warning' | 'error' | 'info' | 'purple' | 'orange' | 'pink';
 
 /**
- * Card de indicador. Componente puramente visual: recebe textos já formatados.
+ * Card de indicador (métrica). Componente puramente visual: recebe textos já formatados.
  * Estrutura: título (esquerda) + ícone (direita), valor e descrição.
+ * Usa classe .metric para accent bar lateral.
  */
 export function Card({
   rotulo,
   valor,
   detalhe,
   icone,
-  tom = 'azul',
+  tom = 'brand',
 }: {
   rotulo: string;
   valor: string;
@@ -22,7 +23,7 @@ export function Card({
   tom?: Tom;
 }) {
   return (
-    <div className="card">
+    <div className="card metric">
       <div className="card-topo">
         <div className="rotulo">{rotulo}</div>
         {icone && <div className={`card-icone ic-${tom}`}>{icone}</div>}

@@ -1,4 +1,5 @@
-import { app, BrowserWindow, shell } from 'electron';
+import { app, BrowserWindow } from 'electron/main';
+import { shell } from 'electron';
 import path from 'node:path';
 
 const isDev = !!process.env.VITE_DEV_URL;
