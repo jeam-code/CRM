@@ -13,6 +13,7 @@ da planilha mestre** via Google Apps Script — nenhum dado fictício ou mock.
 | `/clientes` | Clientes | Cadastro derivado das vendas, com filtros e recência |
 | `/vendas` | Vendas | Todas as linhas das abas mensais (tabela crua + filtros + total) |
 | `/meta` | Meta | Metas por responsável: previsto × realizado na janela 26 → fim do mês |
+| `/fechamento-2025` | Fechamento 2025 | Relatório mensal (jan → dez) da planilha pública "Acompanhamento de RPIs 2025" |
 | `/oportunidades` | Oportunidades | Kanban de clientes/reativação (grava C/N na planilha) |
 | `/atividades` | Atividades | Um pedido = uma atividade, com filtro por data |
 | `/equipe` | Equipe | Cadastro da aba Equipe (nomes, UF e responsável) com pedidos/receita por código |
@@ -33,6 +34,30 @@ da planilha mestre** via Google Apps Script — nenhum dado fictício ou mock.
 
 `Data E-mail` · `VALOR FORMULÁRIO` · `Data Lançamento` · `Nº Ped.` · `Valor Líquido` ·
 `Novos Clientes` · `Cliente` · `CNPJ` · `UF` · `COD. VENDEDOR` · `RPI` · `VELA8` · `PROMO2` · `SAZONAL`
+
+### Fechamento 2025 (segunda planilha, pública)
+
+- **Fonte**: planilha pública
+  [Acompanhamento de RPIs 2025](https://docs.google.com/spreadsheets/d/18QGMUUd3aKuqTtEqSF9BQbsRBnmE5wr4VIpS8RihcQw/edit)
+  (a mesma que o gestor anexa em XLSX). Lida pelo navegador, sem backend e **sem cópia local** — os
+  números mudam na planilha e a aba muda junto.
+- **Endpoint**: `export?format=csv&gid=<GID>` (`src/lib/fechamento2025.ts`, constante `ABAS_2025`).
+  **Nunca usar `gviz/tq?tqx=out:csv&sheet=NOME`**: o gviz descarta as linhas ocultas por filtro da
+  planilha — em NOVEMBRO/DEZEMBRO ele devolvia 51–58 dos 113 RPIs. O `export` devolve a aba inteira
+  (validado nas 12 abas: total de linhas igual ao XLSX e `Total Mês` = soma dos períodos em 100% das
+  linhas).
+- O `gid` de cada aba é o valor da URL ao abri-la (`.../edit#gid=123`). Se uma aba for **recriada** na
+  planilha o gid muda — atualize `ABAS_2025`.
+- **Estrutura detectada pelo cabeçalho** (varia por mês): 2–3 colunas de `META*`, 2–3 colunas de
+  período, `Total Mês`, `% DE ALCANCE DA COTA GERAL`, `COTA PROPORCIONAL`,
+  `% DE ALCANCE DA COTA PROPORCIONAL` e colunas extras (`VELA 10`, `PROMO2`, `COMISSÃO`, `PRÊMIO`…).
+  DEZEMBRO não tem `SOMA DAS METAS` (meta única).
+- **Linha de RPI**: 1ª coluna (equipe `FB`/`SG`) e `VENDEDOR` preenchidos; o bloco de resumo da planilha
+  vem depois e não tem equipe — por isso é ignorado. As linhas "avulsas" (ex.: códigos 79/238) ficam
+  fora, como na própria planilha.
+- **Exibição**: valores de `%` e `COTA` vêm **lidos da planilha** (formato `129,5%`, `10.000,00`);
+  só as linhas de total são calculadas (soma) e o alcance geral = `Total Mês ÷ soma das metas`,
+  mesma base do "ALCANCE - GERAL" da planilha.
 
 ## Regras de negócio
 
@@ -95,11 +120,11 @@ Alternativa: conectar o repositório na Netlify — build `npm run build`, publi
 
 ```
 src/
-  pages/         Dashboard, Clientes, Vendas, Meta, Oportunidades, Atividades, Equipe, Config
+  pages/         Dashboard, Clientes, Vendas, Meta, Fechamento2025, Oportunidades, Atividades, Equipe, Config
   components/    Layout, UI
   hooks/         useVendas (descoberta dinâmica das abas + carga)
   state/         VendasContext
-  lib/           api, domain (regras), config, metas, format
+  lib/           api, domain (regras), config, metas, format, fechamento2025 (planilha 2025)
 electron/        processo principal + preload
 ```
 

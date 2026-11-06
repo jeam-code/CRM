@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { Activity, Handshake, KanbanSquare, LayoutDashboard, Settings, ShoppingCart, Target, Users, UserSquare2 } from 'lucide-react';
+import { Activity, CalendarRange, Handshake, KanbanSquare, LayoutDashboard, Settings, ShoppingCart, Target, Users, UserSquare2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import '../index.css';
 
@@ -11,6 +11,7 @@ const GRUPOS: { titulo: string; itens: { to: string; rotulo: string; icone: Reac
       { to: '/dashboard-clientes', rotulo: 'Dashboard de clientes', icone: <Handshake /> },
       { to: '/vendas', rotulo: 'Todas as vendas', icone: <ShoppingCart /> },
       { to: '/meta', rotulo: 'Meta', icone: <Target /> },
+      { to: '/fechamento-2025', rotulo: 'Fechamento 2025', icone: <CalendarRange /> },
     ],
   },
   {

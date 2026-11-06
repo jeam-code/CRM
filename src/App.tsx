@@ -5,6 +5,7 @@ import DashboardClientes from './pages/DashboardClientes';
 import Clientes from './pages/Clientes';
 import Vendas from './pages/Vendas';
 import Meta from './pages/Meta';
+import Fechamento2025 from './pages/Fechamento2025';
 import Oportunidades from './pages/Oportunidades';
 import Atividades from './pages/Atividades';
 import Equipe from './pages/Equipe';
@@ -21,6 +22,7 @@ export default function App() {
           <Route path="clientes" element={<Clientes />} />
           <Route path="vendas" element={<Vendas />} />
           <Route path="meta" element={<Meta />} />
+          <Route path="fechamento-2025" element={<Fechamento2025 />} />
           <Route path="oportunidades" element={<Oportunidades />} />
           <Route path="atividades" element={<Atividades />} />
           <Route path="equipe" element={<Equipe />} />
