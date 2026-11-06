@@ -13,7 +13,7 @@ da planilha mestre** via Google Apps Script — nenhum dado fictício ou mock.
 | `/clientes` | Clientes | Cadastro derivado das vendas, com filtros e recência |
 | `/vendas` | Vendas | Todas as linhas das abas mensais (tabela crua + filtros + total) |
 | `/meta` | Meta | Metas por responsável: previsto × realizado na janela 26 → fim do mês |
-| `/fechamento-2025` | Fechamento 2025 | Relatório mensal (jan → dez) da planilha pública "Acompanhamento de RPIs 2025" |
+| `/fechamento-2025` | Fechamento 2025 | Relatório (jan → dez) da planilha pública "Acompanhamento de RPIs 2025" + botão **Todos os meses** |
 | `/oportunidades` | Oportunidades | Kanban de clientes/reativação (grava C/N na planilha) |
 | `/atividades` | Atividades | Um pedido = uma atividade, com filtro por data |
 | `/equipe` | Equipe | Cadastro da aba Equipe (nomes, UF e responsável) com pedidos/receita por código |
@@ -58,6 +58,12 @@ da planilha mestre** via Google Apps Script — nenhum dado fictício ou mock.
 - **Exibição**: valores de `%` e `COTA` vêm **lidos da planilha** (formato `129,5%`, `10.000,00`);
   só as linhas de total são calculadas (soma) e o alcance geral = `Total Mês ÷ soma das metas`,
   mesma base do "ALCANCE - GERAL" da planilha.
+- **Botão "Todos os meses"**: soma as 12 abas — cards do ano, painel **Mês a mês** (meta, vendas,
+  alcance, cota e RPIs de cada mês com a linha de total) e ranking por RPI **consolidado** (cada vendedor
+  somado nos 12 meses, com a coluna *Meses* indicando em quantos meses apareceu). As colunas de período
+  não são somadas porque os rótulos mudam de mês para mês — para vê-las, use o seletor de mês.
+  O cache é compartilhado com o modo mensal (visitar um mês antes de "Todos" não baixa de novo) e o botão
+  **Atualizar** limpa o cache e relê a planilha.
 
 ## Regras de negócio
 

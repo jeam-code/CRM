@@ -13,6 +13,7 @@
  * for recriada na planilha o gid muda — atualize ABAS_2025 nesse caso.
  */
 import { MESES } from './config';
+import { normalizarNome } from './format';
 
 export const PLANILHA_2025_ID = '18QGMUUd3aKuqTtEqSF9BQbsRBnmE5wr4VIpS8RihcQw';
 export const PLANILHA_2025_NOME = 'Acompanhamento de RPIs 2025';
@@ -102,6 +103,49 @@ export interface Fechamento2025 {
   linhas: Linha2025[];
   totais: Totais2025;
   equipes: ResumoEquipe2025[];
+}
+
+/** Totais de um mês dentro do consolidado anual. */
+export interface MesConsolidado2025 {
+  mes: string;
+  curto: string;
+  rpis: number;
+  metas: number | null;
+  vendas: number | null;
+  cota: number | null;
+  pctGeral: number | null;
+  pctProp: number | null;
+}
+
+/** Um RPI somado nos 12 meses (agrupado por vendedor). */
+export interface RpiConsolidado2025 {
+  equipe: string;
+  codigo: string;
+  vendedor: string;
+  uf: string;
+  classe: string;
+  /** Em quantos meses esse RPI apareceu. */
+  meses: number;
+  metas: number | null;
+  vendas: number | null;
+  cota: number | null;
+  pctGeral: number | null;
+  pctProp: number | null;
+}
+
+/** Visão "Todos os meses": 12 abas somadas. */
+export interface Consolidado2025 {
+  meses: MesConsolidado2025[];
+  rpis: RpiConsolidado2025[];
+  equipes: ResumoEquipe2025[];
+  totais: {
+    rpis: number;
+    metas: number | null;
+    vendas: number | null;
+    cota: number | null;
+    pctGeral: number | null;
+    pctProp: number | null;
+  };
 }
 
 /** Converte texto no formato brasileiro ("R$ 1.234,56", "12,5%", "R$ -") em número. */
@@ -323,4 +367,111 @@ export function buscarFechamento2025(aba: Aba2025): Promise<Fechamento2025> {
     });
   cache.set(aba.gid, promessa);
   return promessa;
+}
+
+/** Alguns RPIs aparecem com o mesmo vendedor em vários meses — agrupa por nome. */
+function consolidarFechamento(abas: Fechamento2025[]): Consolidado2025 {
+  const meses: MesConsolidado2025[] = abas.map((a, i) => ({
+    mes: a.mes,
+    curto: ABAS_2025[i]?.curto ?? a.mes.slice(0, 3),
+    rpis: a.totais.rpis,
+    metas: a.totais.somaMetas,
+    vendas: a.totais.total,
+    cota: a.totais.cota,
+    pctGeral: a.totais.pctGeral,
+    pctProp: a.totais.pctProp,
+  }));
+
+  const porVendedor = new Map<string, RpiConsolidado2025>();
+  const porEquipe = new Map<string, ResumoEquipe2025>();
+  let totalRpis = 0;
+
+  for (const a of abas) {
+    for (const l of a.linhas) {
+      totalRpis += 1;
+
+      const chave = normalizarNome(l.vendedor) || l.codigo;
+      const existente = porVendedor.get(chave);
+      if (existente) {
+        existente.meses += 1;
+        existente.metas = somar([existente.metas, l.somaMetas]);
+        existente.vendas = somar([existente.vendas, l.total]);
+        existente.cota = somar([existente.cota, l.cota]);
+      } else {
+        porVendedor.set(chave, {
+          equipe: l.equipe,
+          codigo: l.codigo,
+          vendedor: l.vendedor,
+          uf: l.uf,
+          classe: l.classe,
+          meses: 1,
+          metas: l.somaMetas,
+          vendas: l.total,
+          cota: l.cota,
+          pctGeral: null,
+          pctProp: null,
+        });
+      }
+
+      let equipe = porEquipe.get(l.equipe);
+      if (!equipe) {
+        equipe = { equipe: l.equipe, rpis: 0, metas: null, vendas: null, pctGeral: null };
+        porEquipe.set(l.equipe, equipe);
+      }
+      equipe.rpis += 1;
+      equipe.metas = somar([equipe.metas, l.somaMetas]);
+      equipe.vendas = somar([equipe.vendas, l.total]);
+    }
+  }
+
+  const rpis = [...porVendedor.values()];
+  for (const r of rpis) {
+    r.pctGeral = r.metas !== null && r.metas > 0 && r.vendas !== null ? (r.vendas / r.metas) * 100 : null;
+    r.pctProp = r.cota !== null && r.cota > 0 && r.vendas !== null ? (r.vendas / r.cota) * 100 : null;
+  }
+
+  const equipes = [...porEquipe.values()];
+  for (const e of equipes) {
+    e.pctGeral = e.metas !== null && e.metas > 0 && e.vendas !== null ? (e.vendas / e.metas) * 100 : null;
+  }
+
+  const metas = somar(meses.map((m) => m.metas));
+  const vendas = somar(meses.map((m) => m.vendas));
+  const cota = somar(meses.map((m) => m.cota));
+
+  return {
+    meses,
+    rpis,
+    equipes,
+    totais: {
+      rpis: totalRpis,
+      metas,
+      vendas,
+      cota,
+      pctGeral: metas !== null && metas > 0 && vendas !== null ? (vendas / metas) * 100 : null,
+      pctProp: cota !== null && cota > 0 && vendas !== null ? (vendas / cota) * 100 : null,
+    },
+  };
+}
+
+/** Cache do consolidado anual (as 12 abas, já em cache individualmente). */
+let cacheTodos: Promise<Consolidado2025> | null = null;
+
+/** Botão "Atualizar": zera os caches para reler a planilha. */
+export function limparCacheFechamento2025(): void {
+  cache.clear();
+  cacheTodos = null;
+}
+
+/** Fechamento "Todos os meses": busca as 12 abas e soma. */
+export function buscarTodosFechamento2025(): Promise<Consolidado2025> {
+  if (!cacheTodos) {
+    cacheTodos = Promise.all(ABAS_2025.map((a) => buscarFechamento2025(a)))
+      .then(consolidarFechamento)
+      .catch((e) => {
+        cacheTodos = null; // falha transitória não fica em cache
+        throw e instanceof Error ? e : new Error(String(e));
+      });
+  }
+  return cacheTodos;
 }

@@ -7,31 +7,77 @@ import {
   PLANILHA_2025_URL,
   abaPadrao2025,
   buscarFechamento2025,
+  buscarTodosFechamento2025,
+  limparCacheFechamento2025,
   type Aba2025,
+  type Consolidado2025,
   type Fechamento2025,
-  type Linha2025,
+  type MesConsolidado2025,
+  type ResumoEquipe2025,
 } from '../lib/fechamento2025';
 
 /**
  * Aba FECHAMENTO 2025 — relatório mensal da planilha pública
  * "Acompanhamento de RPIs 2025" (a mesma que o gestor anexou em XLSX).
  *
- * Os dados são lidos direto do Google Sheets (endpoint export em CSV), uma aba
- * por mês, com seletor jan → dez. Nada é copiado para o repositório e nenhum
- * valor é inventado: meta, vendas por período, total, alcance, cota e o
- * ranking por RPI vêm exatamente como estão na planilha. Os únicos cálculos
- * próprios são as linhas de total (soma) e o alcance total = vendas ÷ soma
- * das metas, mesma base do "ALCANCE - GERAL" da planilha.
+ * Fonte única: leitura direta do Google Sheets (endpoint export em CSV), sem
+ * backend, sem cópia local e sem dado fictício. Seletor jan → dez + botão
+ * "Todos os meses" (soma das 12 abas, com painel mês a mês).
+ *
+ * Os valores de % e COTA vêm lidos da planilha; os únicos cálculos próprios
+ * são as linhas de total (soma) e o alcance = vendas ÷ metas, mesma base do
+ * "ALCANCE - GERAL" da planilha.
  */
 const pctTxt = (pct: number | null): string =>
   pct === null ? '—' : `${pct.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
 
+/** `moeda` trata null como 0 — aqui célula vazia da planilha fica "—". */
+const moedaOu = (valor: number | null): string => (valor === null ? '—' : moeda(valor));
+
 type CampoOrdem = string;
 
+/** Uma linha do ranking (mês ou consolidado), já em formato de exibição. */
+interface RowRanking {
+  chave: string;
+  equipe: string;
+  codigo: string;
+  vendedor: string;
+  uf: string;
+  classe: string;
+  meses: number | null;
+  meta: number | null;
+  periodos: (number | null)[];
+  total: number | null;
+  pctGeral: number | null;
+  cota: number | null;
+  pctProp: number | null;
+}
+
+/** Tudo que as telas compartilham entre "um mês" e "todos os meses". */
+interface Visao {
+  titulo: string;
+  ehTodos: boolean;
+  rotulos: { metas: string[]; periodos: string[]; extras: string[] };
+  equipes: ResumoEquipe2025[];
+  somaMetas: number | null;
+  total: number | null;
+  cota: number | null;
+  pctGeral: number | null;
+  pctProp: number | null;
+  rpis: number;
+  rpisDistintos: number | null;
+  metasCol: (number | null)[];
+  periodosCol: (number | null)[];
+  extrasCol: (number | null)[];
+  linhas: RowRanking[];
+  meses: MesConsolidado2025[] | null;
+}
+
+type Modo = { tipo: 'mes'; aba: Aba2025 } | { tipo: 'todos' };
+
 /** Valor de uma coluna do ranking; `null` = célula vazia na planilha. */
-function valorCampo(l: Linha2025, campo: CampoOrdem): number | string | null {
+function valorCampo(l: RowRanking, campo: CampoOrdem): number | string | null {
   if (campo.startsWith('periodo:')) return l.periodos[Number(campo.slice('periodo:'.length))] ?? null;
-  if (campo.startsWith('meta:')) return l.metas[Number(campo.slice('meta:'.length))] ?? null;
   switch (campo) {
     case 'equipe':
       return l.equipe;
@@ -41,8 +87,10 @@ function valorCampo(l: Linha2025, campo: CampoOrdem): number | string | null {
       return l.uf;
     case 'classe':
       return l.classe;
+    case 'meses':
+      return l.meses;
     case 'meta':
-      return l.somaMetas;
+      return l.meta;
     case 'total':
       return l.total;
     case 'pctGeral':
@@ -68,8 +116,9 @@ function comparar(a: number | string | null, b: number | string | null, mult: nu
 }
 
 export default function Fechamento2025() {
-  const [aba, setAba] = useState<Aba2025>(() => abaPadrao2025());
+  const [modo, setModo] = useState<Modo>(() => ({ tipo: 'mes', aba: abaPadrao2025() }));
   const [dados, setDados] = useState<Fechamento2025 | null>(null);
+  const [consol, setConsol] = useState<Consolidado2025 | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [versao, setVersao] = useState(0);
@@ -82,38 +131,130 @@ export default function Fechamento2025() {
   useEffect(() => {
     let vivo = true;
     setDados(null);
+    setConsol(null);
     setCarregando(true);
     setErro(null);
-    buscarFechamento2025(aba)
-      .then((d) => {
-        if (vivo) setDados(d);
-      })
-      .catch((e) => {
-        if (vivo) setErro(e instanceof Error ? e.message : String(e));
-      })
-      .finally(() => {
-        if (vivo) setCarregando(false);
-      });
+    const falha = (e: unknown) => {
+      if (vivo) setErro(e instanceof Error ? e.message : String(e));
+    };
+    const fim = () => {
+      if (vivo) setCarregando(false);
+    };
+    if (modo.tipo === 'todos') {
+      buscarTodosFechamento2025()
+        .then((c) => {
+          if (vivo) setConsol(c);
+        })
+        .catch(falha)
+        .finally(fim);
+    } else {
+      buscarFechamento2025(modo.aba)
+        .then((d) => {
+          if (vivo) setDados(d);
+        })
+        .catch(falha)
+        .finally(fim);
+    }
     return () => {
       vivo = false;
     };
-  }, [aba, versao]);
+  }, [modo, versao]);
+
+  /** Referências estáveis: clicar no mês já aberto não recarrega. */
+  const irParaMes = (aba: Aba2025): void =>
+    setModo((m) => (m.tipo === 'mes' && m.aba.gid === aba.gid ? m : { tipo: 'mes', aba }));
+  const irParaTodos = (): void => setModo((m) => (m.tipo === 'todos' ? m : { tipo: 'todos' }));
+  const atualizar = (): void => {
+    limparCacheFechamento2025();
+    setVersao((v) => v + 1);
+  };
+
+  const visao = useMemo<Visao | null>(() => {
+    if (modo.tipo === 'todos') {
+      if (!consol) return null;
+      return {
+        titulo: 'Todos os meses',
+        ehTodos: true,
+        rotulos: { metas: [], periodos: [], extras: [] },
+        equipes: consol.equipes,
+        somaMetas: consol.totais.metas,
+        total: consol.totais.vendas,
+        cota: consol.totais.cota,
+        pctGeral: consol.totais.pctGeral,
+        pctProp: consol.totais.pctProp,
+        rpis: consol.totais.rpis,
+        rpisDistintos: consol.rpis.length,
+        metasCol: [],
+        periodosCol: [],
+        extrasCol: [],
+        linhas: consol.rpis.map((r) => ({
+          chave: `${r.codigo || 'X'}-${r.vendedor}`,
+          equipe: r.equipe,
+          codigo: r.codigo,
+          vendedor: r.vendedor,
+          uf: r.uf,
+          classe: r.classe,
+          meses: r.meses,
+          meta: r.metas,
+          periodos: [],
+          total: r.vendas,
+          pctGeral: r.pctGeral,
+          cota: r.cota,
+          pctProp: r.pctProp,
+        })),
+        meses: consol.meses,
+      };
+    }
+    if (!dados) return null;
+    return {
+      titulo: dados.mes,
+      ehTodos: false,
+      rotulos: dados.rotulos,
+      equipes: dados.equipes,
+      somaMetas: dados.totais.somaMetas,
+      total: dados.totais.total,
+      cota: dados.totais.cota,
+      pctGeral: dados.totais.pctGeral,
+      pctProp: dados.totais.pctProp,
+      rpis: dados.totais.rpis,
+      rpisDistintos: null,
+      metasCol: dados.totais.metas,
+      periodosCol: dados.totais.periodos,
+      extrasCol: dados.totais.extras,
+      linhas: dados.linhas.map((l, i) => ({
+        chave: `${l.equipe}-${l.codigo || i}-${l.vendedor}`,
+        equipe: l.equipe,
+        codigo: l.codigo,
+        vendedor: l.vendedor,
+        uf: l.uf,
+        classe: l.classe,
+        meses: null,
+        meta: l.somaMetas,
+        periodos: l.periodos,
+        total: l.total,
+        pctGeral: l.pctGeral,
+        cota: l.cota,
+        pctProp: l.pctProp,
+      })),
+      meses: null,
+    };
+  }, [modo, dados, consol]);
 
   const linhasOrdenadas = useMemo(() => {
-    if (!dados) return [];
+    if (!visao) return [];
     const q = normalizarNome(busca);
     const filtradas = q
-      ? dados.linhas.filter(
+      ? visao.linhas.filter(
           (l) =>
             normalizarNome(l.vendedor).includes(q) ||
             normalizarNome(l.codigo).includes(q) ||
-            normalizarNome(l.uf).includes(q) ||
-            normalizarNome(l.equipe).includes(q),
+            normalizarNome(l.equipe).includes(q) ||
+            normalizarNome(l.uf).includes(q),
         )
-      : dados.linhas;
+      : visao.linhas;
     const mult = ordem.dir === 'asc' ? 1 : -1;
     return [...filtradas].sort((a, b) => comparar(valorCampo(a, ordem.campo), valorCampo(b, ordem.campo), mult));
-  }, [dados, busca, ordem]);
+  }, [visao, busca, ordem]);
 
   const alternarOrdem = (campo: CampoOrdem): void => {
     setOrdem((atual) =>
@@ -122,9 +263,7 @@ export default function Fechamento2025() {
         : {
             campo,
             dir:
-              campo === 'equipe' || campo === 'vendedor' || campo === 'uf' || campo === 'classe'
-                ? 'asc'
-                : 'desc',
+              campo === 'equipe' || campo === 'vendedor' || campo === 'uf' || campo === 'classe' ? 'asc' : 'desc',
           },
     );
   };
@@ -140,23 +279,32 @@ export default function Fechamento2025() {
     </th>
   );
 
-  if (carregando && !dados) {
-    return <div className="estado">Carregando o fechamento de {aba.mes} na planilha…</div>;
-  }
-  if (erro && !dados) {
+  if (erro && !visao) {
     return (
       <div className="estado">
         <p>Erro: {erro}</p>
-        <button onClick={() => setVersao((v) => v + 1)}>Tentar novamente</button>
+        <button onClick={atualizar}>Tentar novamente</button>
       </div>
     );
   }
-  if (!dados) return null;
+  if (carregando && !visao) {
+    return (
+      <div className="estado">
+        {modo.tipo === 'todos'
+          ? 'Carregando os 12 meses na planilha…'
+          : `Carregando o fechamento de ${modo.aba.mes} na planilha…`}
+      </div>
+    );
+  }
+  if (!visao) return null;
 
-  const t = dados.totais;
-  const falta = (t.somaMetas ?? 0) - (t.total ?? 0);
+  const ehTodos = visao.ehTodos;
+  const falta = (visao.somaMetas ?? 0) - (visao.total ?? 0);
   const detalheAlcance =
     falta > 0 ? `falta ${moeda(falta)}` : falta < 0 ? `acima da meta em ${moeda(-falta)}` : 'meta atingida';
+  const ticket = visao.rpis > 0 ? (visao.total ?? 0) / visao.rpis : null;
+  const prefixoCol = 4 + (ehTodos ? 1 : 0); // Equipe..Classe (+ Meses no consolidado)
+  const totalColunas = prefixoCol + 1 + visao.rotulos.periodos.length + 3;
 
   return (
     <div>
@@ -164,8 +312,8 @@ export default function Fechamento2025() {
         <div>
           <h2>Fechamento 2025</h2>
           <p>
-            Relatório mensal da planilha oficial “Acompanhamento de RPIs 2025” — leitura direta do Google Sheets, sem
-            cópia local e sem dado fictício • meta, vendas por período, total, alcance, cota e ranking por RPI
+            Relatório da planilha oficial “Acompanhamento de RPIs 2025” — leitura direta do Google Sheets, sem cópia
+            local e sem dado fictício • meta, vendas por período, total, alcance, cota e ranking por RPI
           </p>
         </div>
         <button onClick={() => window.open(PLANILHA_2025_URL, '_blank', 'noopener')} title="Abrir a planilha oficial">
@@ -175,47 +323,62 @@ export default function Fechamento2025() {
       </div>
 
       <div className="barra">
+        <button
+          className={modo.tipo === 'todos' ? 'primario' : ''}
+          title="Somar os 12 meses da planilha"
+          onClick={irParaTodos}
+        >
+          Todos os meses
+        </button>
         {ABAS_2025.map((a) => (
           <button
             key={a.gid}
-            className={a.gid === aba.gid ? 'primario' : ''}
+            className={modo.tipo === 'mes' && a.gid === modo.aba.gid ? 'primario' : ''}
             title={`Abrir a aba ${a.mes}`}
-            onClick={() => setAba(a)}
+            onClick={() => irParaMes(a)}
           >
             {a.curto}
           </button>
         ))}
-        <button onClick={() => setVersao((v) => v + 1)} title="Reler a planilha (o mês fica em cache até recarregar)">
+        <button onClick={atualizar} title="Reler a planilha (o conteúdo fica em cache até atualizar)">
           Atualizar
         </button>
       </div>
 
       <div className="grid-cards">
         <Card
-          rotulo={`Meta — ${dados.mes}`}
-          valor={moeda(t.somaMetas)}
-          detalhe={`${dados.rotulos.metas.length} coluna(s) de meta • soma das metas`}
+          rotulo={`Meta — ${ehTodos ? '2025' : visao.titulo}`}
+          valor={moedaOu(visao.somaMetas)}
+          detalhe={ehTodos ? 'soma das 12 abas • soma das metas' : `${visao.rotulos.metas.length} coluna(s) de meta • soma das metas`}
           icone={<Target />}
           tom="brand"
         />
         <Card
-          rotulo="Vendas do mês"
-          valor={moeda(t.total)}
-          detalhe={`Total Mês • soma de ${dados.rotulos.periodos.length} período(s)`}
+          rotulo={ehTodos ? 'Vendas — 2025' : 'Vendas do mês'}
+          valor={moedaOu(visao.total)}
+          detalhe={
+            ehTodos
+              ? 'soma dos Total Mês das 12 abas'
+              : `Total Mês • soma de ${visao.rotulos.periodos.length} período(s)`
+          }
           icone={<Banknote />}
           tom="success"
         />
         <Card
           rotulo="Alcance da meta"
-          valor={pctTxt(t.pctGeral)}
+          valor={pctTxt(visao.pctGeral)}
           detalhe={`vendas ÷ metas • ${detalheAlcance}`}
           icone={<Percent />}
           tom="info"
         />
         <Card
-          rotulo="RPIs no mês"
-          valor={numero(t.rpis)}
-          detalhe={`${dados.equipes.length} equipe(s) • total do mês por RPI`}
+          rotulo={ehTodos ? 'RPIs no ano' : 'RPIs no mês'}
+          valor={numero(visao.rpis)}
+          detalhe={
+            ehTodos
+              ? `${numero(visao.rpisDistintos)} RPIs distintos • soma das 12 abas`
+              : `${visao.equipes.length} equipe(s) • total do mês por RPI`
+          }
           icone={<Layers />}
           tom="purple"
         />
@@ -223,87 +386,135 @@ export default function Fechamento2025() {
 
       <div className="grid-compacta">
         <Card
-          rotulo="Cota proporcional"
-          valor={moeda(t.cota)}
+          rotulo={ehTodos ? 'Cota proporcional — 2025' : 'Cota proporcional'}
+          valor={moedaOu(visao.cota)}
           detalhe="soma da cota proporcional à data de corte"
           icone={<PieChart />}
           tom="warning"
         />
         <Card
           rotulo="Alcance da cota"
-          valor={pctTxt(t.pctProp)}
+          valor={pctTxt(visao.pctProp)}
           detalhe="vendas ÷ cota proporcional"
           icone={<Gauge />}
           tom="orange"
         />
         <Card
           rotulo="Ticket médio"
-          valor={moeda(t.rpis > 0 ? (t.total ?? 0) / t.rpis : null)}
-          detalhe={`total do mês ÷ ${numero(t.rpis)} RPIs`}
+          valor={moedaOu(ticket)}
+          detalhe={`total ÷ ${numero(visao.rpis)} RPIs`}
           icone={<Receipt />}
           tom="info"
         />
       </div>
 
-      <div className="painel">
-        <h3>Metas e períodos — {dados.mes}</h3>
-        <p className="sub">
-          Colunas do relatório mensal. Cada meta e cada período é uma coluna da planilha; os totais abaixo são a soma
-          das próprias colunas.
-        </p>
-        <div className="duas-col">
+      {ehTodos && visao.meses && (
+        <div className="painel">
+          <h3>Mês a mês — 2025</h3>
+          <p className="sub">
+            Totais de cada aba mensal da planilha. A última linha soma os 12 meses (é a mesma base dos cards acima).
+          </p>
           <table>
             <thead>
               <tr>
-                <th>Meta</th>
-                <th className="direita">Valor</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dados.rotulos.metas.map((r, i) => (
-                <tr key={r}>
-                  <td>{r}</td>
-                  <td className="direita">{moeda(t.metas[i])}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td>Soma das metas</td>
-                <td className="direita">{moeda(t.somaMetas)}</td>
-              </tr>
-            </tfoot>
-          </table>
-          <table>
-            <thead>
-              <tr>
-                <th>Período</th>
+                <th>Mês</th>
+                <th className="direita">RPIs</th>
+                <th className="direita">Meta</th>
                 <th className="direita">Vendas</th>
+                <th className="direita">% alcance</th>
+                <th className="direita">Cota</th>
+                <th className="direita">% cota prop.</th>
               </tr>
             </thead>
             <tbody>
-              {dados.rotulos.periodos.map((r, i) => (
-                <tr key={r}>
-                  <td>{r}</td>
-                  <td className="direita">{moeda(t.periodos[i])}</td>
+              {visao.meses.map((m) => (
+                <tr key={m.mes}>
+                  <td>{m.mes}</td>
+                  <td className="direita">{numero(m.rpis)}</td>
+                  <td className="direita">{moedaOu(m.metas)}</td>
+                  <td className="direita">{moedaOu(m.vendas)}</td>
+                  <td className="direita">{pctTxt(m.pctGeral)}</td>
+                  <td className="direita">{moedaOu(m.cota)}</td>
+                  <td className="direita">{pctTxt(m.pctProp)}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
               <tr>
-                <td>Total Mês</td>
-                <td className="direita">{moeda(t.total)}</td>
+                <td>Total 2025</td>
+                <td className="direita">{numero(visao.rpis)}</td>
+                <td className="direita">{moedaOu(visao.somaMetas)}</td>
+                <td className="direita">{moedaOu(visao.total)}</td>
+                <td className="direita">{pctTxt(visao.pctGeral)}</td>
+                <td className="direita">{moedaOu(visao.cota)}</td>
+                <td className="direita">{pctTxt(visao.pctProp)}</td>
               </tr>
             </tfoot>
           </table>
         </div>
-      </div>
+      )}
+
+      {!ehTodos && (
+        <div className="painel">
+          <h3>Metas e períodos — {visao.titulo}</h3>
+          <p className="sub">
+            Colunas do relatório mensal. Cada meta e cada período é uma coluna da planilha; os totais abaixo são a soma
+            das próprias colunas.
+          </p>
+          <div className="duas-col">
+            <table>
+              <thead>
+                <tr>
+                  <th>Meta</th>
+                  <th className="direita">Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visao.rotulos.metas.map((r, i) => (
+                  <tr key={r}>
+                    <td>{r}</td>
+                    <td className="direita">{moedaOu(visao.metasCol[i] ?? null)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td>Soma das metas</td>
+                  <td className="direita">{moedaOu(visao.somaMetas)}</td>
+                </tr>
+              </tfoot>
+            </table>
+            <table>
+              <thead>
+                <tr>
+                  <th>Período</th>
+                  <th className="direita">Vendas</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visao.rotulos.periodos.map((r, i) => (
+                  <tr key={r}>
+                    <td>{r}</td>
+                    <td className="direita">{moedaOu(visao.periodosCol[i] ?? null)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td>Total Mês</td>
+                  <td className="direita">{moedaOu(visao.total)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="painel">
         <h3>Resumo por equipe</h3>
         <p className="sub">
           Agregação das linhas do relatório por equipe (FB = Festa, SG = Sérgio). % de alcance = vendas ÷ soma das
-          metas da equipe.
+          metas da equipe{ehTodos ? ', somando os 12 meses' : ''}.
         </p>
         <table>
           <thead>
@@ -316,12 +527,12 @@ export default function Fechamento2025() {
             </tr>
           </thead>
           <tbody>
-            {dados.equipes.map((e) => (
+            {visao.equipes.map((e) => (
               <tr key={e.equipe}>
                 <td>{e.equipe}</td>
                 <td className="direita">{numero(e.rpis)}</td>
-                <td className="direita">{moeda(e.metas)}</td>
-                <td className="direita">{moeda(e.vendas)}</td>
+                <td className="direita">{moedaOu(e.metas)}</td>
+                <td className="direita">{moedaOu(e.vendas)}</td>
                 <td className="direita">{pctTxt(e.pctGeral)}</td>
               </tr>
             ))}
@@ -329,20 +540,21 @@ export default function Fechamento2025() {
           <tfoot>
             <tr>
               <td>Total</td>
-              <td className="direita">{numero(t.rpis)}</td>
-              <td className="direita">{moeda(t.somaMetas)}</td>
-              <td className="direita">{moeda(t.total)}</td>
-              <td className="direita">{pctTxt(t.pctGeral)}</td>
+              <td className="direita">{numero(visao.rpis)}</td>
+              <td className="direita">{moedaOu(visao.somaMetas)}</td>
+              <td className="direita">{moedaOu(visao.total)}</td>
+              <td className="direita">{pctTxt(visao.pctGeral)}</td>
             </tr>
           </tfoot>
         </table>
       </div>
 
       <div className="painel">
-        <h3>Ranking por RPI — {dados.mes}</h3>
+        <h3>Ranking por RPI — {visao.titulo}</h3>
         <p className="sub">
-          Clique nos títulos das colunas para ordenar — por padrão, maior Total Mês primeiro. As colunas de % vêm
-          lidas da planilha; Total Mês é a soma dos períodos (conferido linha a linha).
+          {ehTodos
+            ? 'Cada linha é um RPI somado nos 12 meses (coluna “Meses” mostra em quantos meses apareceu). As colunas de período variam por mês e por isso não são somadas — use o seletor de mês para vê-las.'
+            : 'Clique nos títulos das colunas para ordenar — por padrão, maior Total Mês primeiro. As colunas de % vêm lidas da planilha; Total Mês é a soma dos períodos (conferido linha a linha).'}
         </p>
         <div className="barra">
           <input
@@ -354,7 +566,7 @@ export default function Fechamento2025() {
           />
           {busca && <button onClick={() => setBusca('')}>Limpar busca</button>}
           <span className="mono">
-            {numero(linhasOrdenadas.length)} de {numero(dados.linhas.length)} RPIs
+            {numero(linhasOrdenadas.length)} de {numero(visao.linhas.length)} RPIs
           </span>
         </div>
         <table>
@@ -364,58 +576,60 @@ export default function Fechamento2025() {
               {thOrdenavel('vendedor', 'Vendedor')}
               {thOrdenavel('uf', 'UF')}
               {thOrdenavel('classe', 'Classe')}
+              {ehTodos && thOrdenavel('meses', 'Meses', 'direita')}
               {thOrdenavel('meta', 'Meta', 'direita')}
-              {dados.rotulos.periodos.map((r, i) => thOrdenavel(`periodo:${i}`, r, 'direita'))}
-              {thOrdenavel('total', 'Total Mês', 'direita')}
+              {visao.rotulos.periodos.map((r, i) => thOrdenavel(`periodo:${i}`, r, 'direita'))}
+              {thOrdenavel('total', ehTodos ? 'Vendas' : 'Total Mês', 'direita')}
               {thOrdenavel('pctGeral', '% alcance', 'direita')}
               {thOrdenavel('cota', 'Cota', 'direita')}
               {thOrdenavel('pctProp', '% cota prop.', 'direita')}
             </tr>
           </thead>
           <tbody>
-            {linhasOrdenadas.map((l, i) => (
-              <tr key={`${l.equipe}-${l.codigo || i}-${l.vendedor}`}>
+            {linhasOrdenadas.map((l) => (
+              <tr key={l.chave}>
                 <td>{l.equipe}</td>
                 <td>{l.vendedor}</td>
                 <td>{l.uf}</td>
                 <td>{l.classe}</td>
-                <td className="direita">{moeda(l.somaMetas)}</td>
-                {l.periodos.map((p, j) => (
-                  <td key={dados.rotulos.periodos[j] ?? j} className="direita">
-                    {moeda(p)}
+                {ehTodos && <td className="direita">{numero(l.meses ?? 0)}</td>}
+                <td className="direita">{moedaOu(l.meta)}</td>
+                {l.periodos.map((p, i) => (
+                  <td key={visao.rotulos.periodos[i] ?? i} className="direita">
+                    {moedaOu(p)}
                   </td>
                 ))}
-                <td className="direita destaque">{moeda(l.total)}</td>
+                <td className="direita destaque">{moedaOu(l.total)}</td>
                 <td className="direita">{pctTxt(l.pctGeral)}</td>
-                <td className="direita">{moeda(l.cota)}</td>
+                <td className="direita">{moedaOu(l.cota)}</td>
                 <td className="direita">{pctTxt(l.pctProp)}</td>
               </tr>
             ))}
             {linhasOrdenadas.length === 0 && (
               <tr>
-                <td colSpan={10 + dados.rotulos.periodos.length}>Nenhum RPI corresponde à busca.</td>
+                <td colSpan={totalColunas}>Nenhum RPI corresponde à busca.</td>
               </tr>
             )}
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={4}>Total do mês ({aba.mes})</td>
-              <td className="direita">{moeda(t.somaMetas)}</td>
-              {t.periodos.map((p, i) => (
-                <td key={dados.rotulos.periodos[i] ?? i} className="direita">
-                  {moeda(p)}
+              <td colSpan={prefixoCol}>{ehTodos ? 'Total do ano' : `Total do mês (${visao.titulo})`}</td>
+              <td className="direita">{moedaOu(visao.somaMetas)}</td>
+              {visao.periodosCol.map((p, i) => (
+                <td key={visao.rotulos.periodos[i] ?? i} className="direita">
+                  {moedaOu(p)}
                 </td>
               ))}
-              <td className="direita">{moeda(t.total)}</td>
-              <td className="direita">{pctTxt(t.pctGeral)}</td>
-              <td className="direita">{moeda(t.cota)}</td>
-              <td className="direita">{pctTxt(t.pctProp)}</td>
+              <td className="direita">{moedaOu(visao.total)}</td>
+              <td className="direita">{pctTxt(visao.pctGeral)}</td>
+              <td className="direita">{moedaOu(visao.cota)}</td>
+              <td className="direita">{pctTxt(visao.pctProp)}</td>
             </tr>
           </tfoot>
         </table>
       </div>
 
-      {dados.rotulos.extras.length > 0 && (
+      {!ehTodos && visao.rotulos.extras.length > 0 && (
         <div className="painel">
           <h3>Colunas complementares</h3>
           <p className="sub">Totais das colunas extras do relatório do mês, lidos da planilha.</p>
@@ -427,10 +641,10 @@ export default function Fechamento2025() {
               </tr>
             </thead>
             <tbody>
-              {dados.rotulos.extras.map((r, i) => (
+              {visao.rotulos.extras.map((r, i) => (
                 <tr key={r}>
                   <td>{r}</td>
-                  <td className="direita">{moeda(t.extras[i])}</td>
+                  <td className="direita">{moedaOu(visao.extrasCol[i] ?? null)}</td>
                 </tr>
               ))}
             </tbody>
